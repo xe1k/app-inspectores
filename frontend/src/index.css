@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Tokens SaasAble landing (tema "AI") en formato shadcn */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 210 7% 11%; /* #1A1C1E - on surface */
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 7% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 7% 11%;
+
+    --primary: 201 100% 30%; /* #006397 - primary/40 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 218 40% 96%; /* #F1F4F9 - surface container low */
+    --secondary-foreground: 210 7% 11%;
+
+    --muted: 218 40% 96%;
+    --muted-foreground: 215 8% 28%; /* #42474E - on surface variant */
+
+    --accent: 211 100% 90%; /* #CCE5FF - primary container */
+    --accent-foreground: 204 100% 10%; /* #001D31 - on primary container */
+
+    --destructive: 2 73% 53%; /* #DE3730 - error/40 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 19% 92%; /* #E6E8EE - surface container high */
+    --input: 215 11% 78%; /* #C2C7CE - outline variant (bordes de inputs) */
+    --ring: 201 100% 30%;
+
+    --radius: 1.125rem; /* md = 16px, como los inputs de SaasAble */
+
+    /* Escala de neutros (RGB para soportar opacidades de Tailwind) */
+    --slate-50: 249 249 252; /* #F9F9FC */
+    --slate-100: 241 244 249; /* #F1F4F9 */
+    --slate-200: 230 232 238; /* #E6E8EE */
+    --slate-300: 215 218 223; /* #D7DADF */
+    --slate-400: 153 160 167; /* #99A0A7 */
+    --slate-500: 114 120 126; /* #72787E */
+    --slate-600: 66 71 78; /* #42474E */
+    --slate-700: 51 56 62; /* #33383E */
+    --slate-800: 37 41 46; /* #25292E */
+    --slate-900: 26 28 30; /* #1A1C1E */
+    --slate-950: 18 20 23; /* #121417 */
+  }
+
+  /* Esquema oscuro (tonos MD3 del mismo tema "AI") */
+  .dark {
+    --background: 206 18% 8%; /* #101417 - surface dark */
+    --foreground: 240 5% 89%; /* #E2E2E5 - on surface dark */
+
+    --card: 210 15% 13%; /* #1C2126 - surface container */
+    --card-foreground: 240 5% 89%;
+
+    --popover: 210 15% 13%;
+    --popover-foreground: 240 5% 89%;
+
+    --primary: 208 100% 79%; /* #92CCFF - primary/80 */
+    --primary-foreground: 202 100% 16%; /* #003351 - on primary dark */
+
+    --secondary: 207 13% 13%;
+    --secondary-foreground: 240 5% 89%;
+
+    --muted: 207 13% 13%;
+    --muted-foreground: 210 9% 68%; /* #A6ADB4 */
+
+    --accent: 201 100% 23%; /* #004B73 - primary container dark */
+    --accent-foreground: 211 100% 90%; /* #CCE5FF */
+
+    --destructive: 6 100% 84%; /* #FFB4AB - error/80 */
+    --destructive-foreground: 357 100% 21%; /* #690005 */
+
+    --border: 210 13% 19%; /* #2A3036 */
+    --input: 210 9% 33%; /* #4D555D - borde de inputs visible */
+    --ring: 208 100% 79%;
+
+    /* Escala de neutros invertida (claro <-> oscuro, mismo rol semántico) */
+    --slate-50: 20 24 27; /* fondo de página */
+    --slate-100: 29 34 38; /* contenedores */
+    --slate-200: 42 48 54; /* bordes */
+    --slate-300: 58 65 72; /* bordes punteados / hover */
+    --slate-400: 138 146 153; /* texto pista */
+    --slate-500: 152 161 168; /* texto secundario */
+    --slate-600: 183 190 197; /* texto secundario fuerte */
+    --slate-700: 205 211 216; /* texto cuerpo */
+    --slate-800: 222 226 230;
+    --slate-900: 237 239 242; /* títulos */
+    --slate-950: 11 14 16; /* overlays */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
+
+/* Fondo SaasAble: superficie clara con grilla de puntos sutil */
+.dots-bg {
+  background-color: theme('colors.slate.50');
+  background-image: radial-gradient(theme('colors.slate.300') 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
+}
