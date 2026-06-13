@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Camera, Loader2, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Camera, ChevronDown, ChevronUp, Loader2, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import EstadoHallazgo from '@/components/EstadoHallazgo';
 import PhotoEditorDialog, { type PhotoEditorResult } from '@/components/PhotoEditorDialog';
 import ZonaSelector, { type Zona } from '@/components/ZonaSelector';
-import { parseCantidad } from '@/lib/formatHallazgo';
+import { formatHoras, formatPersonas, parseCantidad } from '@/lib/formatHallazgo';
 import { apiFetch, apiUpload, ApiError } from '@/lib/api';
 import { compressImage } from '@/lib/compressImage';
 
@@ -90,14 +90,24 @@ function Mensaje({ tipo, texto }: MensajeProps) {
   );
 }
 
+function Dato({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{etiqueta}</p>
+      <div className="text-base font-medium text-slate-900">{children}</div>
+    </div>
+  );
+}
+
 export default function FindingPage() {
   const { inspeccionId, hallazgoId } = useParams<{ inspeccionId: string; hallazgoId?: string }>();
-  const esNuevo = !hallazgoId;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fotosRef = useRef<HTMLDivElement>(null);
+  const marcasRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const aplicoMarcarRef = useRef(false);
 
   const [hallazgo, setHallazgo] = useState<Hallazgo | null>(null);
   const [inspeccion, setInspeccion] = useState<Inspeccion | null>(null);
@@ -125,7 +135,11 @@ export default function FindingPage() {
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [fotoVersion, setFotoVersion] = useState(0);
   const [diagramaActivo, setDiagramaActivo] = useState<number | null>(null);
-  const [destacarFotos] = useState(searchParams.get('paso') === 'fotos');
+  const [editandoTerreno, setEditandoTerreno] = useState(false);
+  const [informeAbierto, setInformeAbierto] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 640
+  );
+  const [resaltarMarcas, setResaltarMarcas] = useState(false);
   const [editorArchivo, setEditorArchivo] = useState<File | null>(null);
   const [editorFotoId, setEditorFotoId] = useState<number | null>(null);
   const [anotandoFotoId, setAnotandoFotoId] = useState<number | null>(null);
@@ -135,11 +149,19 @@ export default function FindingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hallazgoId, inspeccionId]);
 
+  // Entrada directa al marcado de diagrama (?marcar=1, ver pantalla de éxito del wizard).
   useEffect(() => {
-    if (destacarFotos && fotosRef.current) {
-      fotosRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (aplicoMarcarRef.current) return;
+    if (searchParams.get('marcar') === '1' && hallazgo && marcasRef.current) {
+      aplicoMarcarRef.current = true;
+      marcasRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setResaltarMarcas(true);
+      setTimeout(() => setResaltarMarcas(false), 2000);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('marcar');
+      window.history.replaceState({}, '', url.pathname + url.search);
     }
-  }, [destacarFotos]);
+  }, [searchParams, hallazgo]);
 
   // Si la zona elegida tiene coordenadas, mostrar automáticamente su diagrama
   useEffect(() => {
@@ -215,20 +237,13 @@ export default function FindingPage() {
       preexistencia: preexistencia || null,
     };
     try {
-      if (esNuevo) {
-        const creado = await apiFetch<Hallazgo>('/hallazgos', {
-          method: 'POST',
-          body: JSON.stringify({ ...cuerpo, inspeccion_id: Number(inspeccionId) }),
-        });
-        navigate(`/inspecciones/${inspeccionId}/hallazgos/${creado.id}?paso=fotos`);
-      } else {
-        const actualizado = await apiFetch<Hallazgo>(`/hallazgos/${hallazgoId}`, {
-          method: 'PUT',
-          body: JSON.stringify(cuerpo),
-        });
-        setHallazgo(actualizado);
-        setMsg({ tipo: 'ok', texto: 'Cambios guardados' });
-      }
+      const actualizado = await apiFetch<Hallazgo>(`/hallazgos/${hallazgoId}`, {
+        method: 'PUT',
+        body: JSON.stringify(cuerpo),
+      });
+      setHallazgo(actualizado);
+      setMsg({ tipo: 'ok', texto: 'Cambios guardados' });
+      setEditandoTerreno(false);
     } catch (e) {
       setMsg({ tipo: 'error', texto: e instanceof ApiError ? e.message : 'Error de conexión con el servidor' });
     } finally {
@@ -411,7 +426,7 @@ export default function FindingPage() {
     );
   }
 
-  if (!inspeccion || !plantilla || (!esNuevo && !hallazgo)) {
+  if (!inspeccion || !plantilla || !hallazgo) {
     return (
       <div className="flex justify-center py-10">
         <Loader2 className="h-7 w-7 animate-spin text-brand dark:text-brand-cyan" aria-hidden="true" />
@@ -448,156 +463,221 @@ export default function FindingPage() {
       </div>
 
       <h1 className="mb-3 font-heading text-xl font-semibold text-slate-900">
-        {esNuevo ? `Nuevo hallazgo — ${inspeccion.equipo}` : `Hallazgo N°${hallazgo!.numero} — ${inspeccion.equipo}`}
+        Hallazgo N°{hallazgo.numero} — {inspeccion.equipo}
       </h1>
 
       {/* Ciclo de vida: estado rastreable (la criticidad es fija y vive en el formulario) */}
-      {!esNuevo && hallazgo && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            {criticidad && (
-              <span className={`whitespace-nowrap rounded-full border-2 px-3 py-1.5 text-sm font-bold ${
-                CRITICIDADES.find((c) => c.valor === criticidad)?.activo || 'border-slate-200 text-slate-700'
-              }`}>
-                Criticidad {CRITICIDADES.find((c) => c.valor === criticidad)?.etiqueta}
-              </span>
+      <div className="mb-4 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {criticidad && (
+            <span className={`whitespace-nowrap rounded-full border-2 px-3 py-1.5 text-sm font-bold ${
+              CRITICIDADES.find((c) => c.valor === criticidad)?.activo || 'border-slate-200 text-slate-700'
+            }`}>
+              Criticidad {CRITICIDADES.find((c) => c.valor === criticidad)?.etiqueta}
+            </span>
+          )}
+          <EstadoHallazgo
+            hallazgoId={hallazgo.id}
+            estado={hallazgo.estado}
+            conHistorial
+            onCambio={(h) => setHallazgo({ ...hallazgo, estado: h.estado, fecha_estado_cambio: h.fecha_estado_cambio })}
+          />
+        </div>
+      </div>
+
+      {msg && <div className="mb-3"><Mensaje {...msg} /></div>}
+
+      <form onSubmit={guardar}>
+        {/* SECCIÓN A: Datos de terreno */}
+        <div className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="font-heading text-base font-semibold text-slate-900">Datos de terreno</h2>
+            {!completada && !editandoTerreno && (
+              <button
+                type="button"
+                onClick={() => setEditandoTerreno(true)}
+                className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand dark:text-brand-cyan"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Editar datos de terreno
+              </button>
             )}
-            <EstadoHallazgo
-              hallazgoId={hallazgo.id}
-              estado={hallazgo.estado}
-              conHistorial
-              onCambio={(h) => setHallazgo({ ...hallazgo, estado: h.estado, fecha_estado_cambio: h.fecha_estado_cambio })}
-            />
           </div>
-        </div>
-      )}
 
-      {esNuevo && (
-        <p className="-mt-2 mb-3 text-sm text-slate-500">
-          Después de guardar podrás agregar las fotos y marcar la ubicación en el diagrama.
-        </p>
-      )}
+          {editandoTerreno ? (
+            <>
+              <h3 className="mb-2 font-heading text-sm font-semibold text-slate-900">Criticidad</h3>
+              <div className="mb-4 flex gap-2.5">
+                {CRITICIDADES.map((c) => (
+                  <button
+                    key={c.valor}
+                    type="button"
+                    disabled={completada}
+                    onClick={() => setCriticidad(c.valor)}
+                    className={`flex h-14 flex-1 items-center justify-center rounded-lg border-2 font-heading text-base font-bold transition-colors ${
+                      criticidad === c.valor ? c.activo : 'border-slate-200 bg-card text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {c.etiqueta}
+                  </button>
+                ))}
+              </div>
 
-      {/* Formulario */}
-      <form onSubmit={guardar} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
-        <h2 className="mb-2 font-heading text-base font-semibold text-slate-900">Criticidad</h2>
-        <div className="mb-4 flex gap-2.5">
-          {CRITICIDADES.map((c) => (
-            <button
-              key={c.valor}
-              type="button"
-              disabled={completada}
-              onClick={() => setCriticidad(c.valor)}
-              className={`flex h-14 flex-1 items-center justify-center rounded-lg border-2 font-heading text-base font-bold transition-colors ${
-                criticidad === c.valor ? c.activo : 'border-slate-200 bg-card text-slate-600 hover:border-slate-300'
-              }`}
-            >
-              {c.etiqueta}
-            </button>
-          ))}
-        </div>
+              <h3 className="mb-2 font-heading text-sm font-semibold text-slate-900">Ubicación del hallazgo</h3>
+              {usarSelectorZonas ? (
+                <div className="mb-4">
+                  <ZonaSelector
+                    zonas={zonas}
+                    valor={{ sistema, sector, codigo, zona_id: zonaId }}
+                    onChange={(sel) => {
+                      setSistema(sel.sistema);
+                      setSector(sel.sector);
+                      setCodigo(sel.codigo);
+                      setZonaId(sel.zona_id);
+                    }}
+                    criticidadActual={criticidad}
+                    onAplicarCriticidad={setCriticidad}
+                    disabled={completada}
+                  />
+                </div>
+              ) : (
+                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sistema">Sistema</Label>
+                    <Input id="sistema" className="h-11 bg-card" placeholder="ej. Chasis, Tolva, Estructura" value={sistema} onChange={(e) => setSistema(e.target.value)} disabled={completada} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sector">Sector</Label>
+                    <Input id="sector" className="h-11 bg-card" placeholder="ej. Bastidores derecho e izquierdo" value={sector} onChange={(e) => setSector(e.target.value)} disabled={completada} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="codigo">Código</Label>
+                    <Input id="codigo" className="h-11 bg-card" placeholder="ej. ZA01LHO" value={codigo} onChange={(e) => setCodigo(e.target.value)} disabled={completada} />
+                  </div>
+                </div>
+              )}
 
-        <h2 className="mb-2 font-heading text-base font-semibold text-slate-900">Ubicación del hallazgo</h2>
-        {usarSelectorZonas ? (
-          <div className="mb-4">
-            <ZonaSelector
-              zonas={zonas}
-              valor={{ sistema, sector, codigo, zona_id: zonaId }}
-              onChange={(sel) => {
-                setSistema(sel.sistema);
-                setSector(sel.sector);
-                setCodigo(sel.codigo);
-                setZonaId(sel.zona_id);
-              }}
-              criticidadActual={criticidad}
-              onAplicarCriticidad={setCriticidad}
-              disabled={completada}
-            />
-          </div>
-        ) : (
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="sistema">Sistema</Label>
-              <Input id="sistema" className="h-11 bg-card" placeholder="ej. Chasis, Tolva, Estructura" value={sistema} onChange={(e) => setSistema(e.target.value)} disabled={completada} />
+              <div className="mb-4 space-y-1.5">
+                <Label htmlFor="tipoDano">Tipo de daño</Label>
+                <Input id="tipoDano" className="h-11 bg-card" placeholder="ej. Fisura, Corrosión, Deformación…" value={tipoDano} onChange={(e) => setTipoDano(e.target.value)} disabled={completada} />
+              </div>
+
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="tiempoReparacion">Tiempo estimado (horas)</Label>
+                  <Input id="tiempoReparacion" type="number" inputMode="numeric" min="0" max="999" className="h-11 bg-card" placeholder="ej. 12" value={tiempoReparacion} onChange={(e) => setTiempoReparacion(e.target.value)} disabled={completada} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="recursos">Personas requeridas</Label>
+                  <Input id="recursos" type="number" inputMode="numeric" min="0" max="99" className="h-11 bg-card" placeholder="ej. 2" value={recursos} onChange={(e) => setRecursos(e.target.value)} disabled={completada} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="preexistencia">Preexistencia del daño</Label>
+                  <select
+                    id="preexistencia"
+                    className="flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                    value={preexistencia}
+                    onChange={(e) => setPreexistencia(e.target.value)}
+                    disabled={completada}
+                  >
+                    <option value="">— Selecciona —</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                    <option value="na">N/A</option>
+                  </select>
+                </div>
+              </div>
+
+              {!completada && (
+                <div className="flex gap-2.5">
+                  <Button type="submit" variant="gradient" className="h-12 flex-1 text-base" disabled={guardando}>
+                    {guardando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                    Guardar cambios
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { cargar(); setEditandoTerreno(false); }}
+                    className="rounded-full px-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Dato etiqueta="Criticidad">
+                {criticidad ? (
+                  <span className={`inline-block rounded-full border-2 px-3 py-1 font-heading font-bold ${
+                    CRITICIDADES.find((c) => c.valor === criticidad)?.activo || 'border-slate-200 text-slate-700'
+                  }`}>
+                    {CRITICIDADES.find((c) => c.valor === criticidad)?.etiqueta}
+                  </span>
+                ) : '—'}
+              </Dato>
+              <Dato etiqueta="Tipo de daño">{tipoDano || '—'}</Dato>
+              <Dato etiqueta="Ubicación">
+                {sistema || '—'}{sector ? ` — ${sector}` : ''}
+                {codigo && <span className="mt-0.5 block text-sm font-normal text-slate-600">Código {codigo}</span>}
+              </Dato>
+              <Dato etiqueta="Tiempo estimado">{formatHoras(tiempoReparacion)}</Dato>
+              <Dato etiqueta="Personas requeridas">{formatPersonas(recursos)}</Dato>
+              <Dato etiqueta="Preexistencia">
+                {preexistencia === 'si' ? 'Sí' : preexistencia === 'no' ? 'No' : preexistencia === 'na' ? 'N/A' : '—'}
+              </Dato>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sector">Sector</Label>
-              <Input id="sector" className="h-11 bg-card" placeholder="ej. Bastidores derecho e izquierdo" value={sector} onChange={(e) => setSector(e.target.value)} disabled={completada} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="codigo">Código</Label>
-              <Input id="codigo" className="h-11 bg-card" placeholder="ej. ZA01LHO" value={codigo} onChange={(e) => setCodigo(e.target.value)} disabled={completada} />
-            </div>
-          </div>
-        )}
-
-        <h2 className="mb-2 font-heading text-base font-semibold text-slate-900">Descripción del hallazgo</h2>
-        <div className="mb-4 flex flex-col gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="tipoDano">Tipo de daño</Label>
-            <Input id="tipoDano" className="h-11 bg-card" placeholder="ej. Fisura, Corrosión, Deformación…" value={tipoDano} onChange={(e) => setTipoDano(e.target.value)} disabled={completada} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="descripcionDano">Observación / descripción del daño</Label>
-            <Textarea id="descripcionDano" rows={3} className="bg-card" placeholder="Describe lo observado: tipo de daño, dimensiones, ubicación exacta…" value={descripcionDano} onChange={(e) => setDescripcionDano(e.target.value)} disabled={completada} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="trabajoRealizar">Trabajo a realizar</Label>
-            <Textarea id="trabajoRealizar" rows={2} className="bg-card" placeholder="ej. Reparación mediante procedimiento X, cambio de pieza, evaluación por fabricante…" value={trabajoRealizar} onChange={(e) => setTrabajoRealizar(e.target.value)} disabled={completada} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="recomendacion">Recomendación</Label>
-            <Textarea id="recomendacion" rows={2} className="bg-card" placeholder="ej. Apoyo con plataforma, sector limpio, repuesto adecuado…" value={recomendacion} onChange={(e) => setRecomendacion(e.target.value)} disabled={completada} />
-          </div>
+          )}
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="tiempoReparacion">Tiempo estimado (horas)</Label>
-            <Input id="tiempoReparacion" type="number" inputMode="numeric" min="0" max="999" className="h-11 bg-card" placeholder="ej. 12" value={tiempoReparacion} onChange={(e) => setTiempoReparacion(e.target.value)} disabled={completada} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="recursos">Personas requeridas</Label>
-            <Input id="recursos" type="number" inputMode="numeric" min="0" max="99" className="h-11 bg-card" placeholder="ej. 2" value={recursos} onChange={(e) => setRecursos(e.target.value)} disabled={completada} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="preexistencia">Preexistencia del daño</Label>
-            <select
-              id="preexistencia"
-              className="flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-              value={preexistencia}
-              onChange={(e) => setPreexistencia(e.target.value)}
-              disabled={completada}
-            >
-              <option value="">— Selecciona —</option>
-              <option value="si">Sí</option>
-              <option value="no">No</option>
-              <option value="na">N/A</option>
-            </select>
-          </div>
+        {/* SECCIÓN B: Informe (oficina) */}
+        <div className="mt-3 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setInformeAbierto((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <h2 className="font-heading text-base font-semibold text-slate-900">
+              Informe (oficina){!informeAbierto ? ' — completar en escritorio' : ''}
+            </h2>
+            {informeAbierto ? (
+              <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" aria-hidden="true" />
+            )}
+          </button>
+
+          {informeAbierto && (
+            <div className="mt-3 flex flex-col gap-3">
+              {!descripcionDano && !trabajoRealizar && !recomendacion && (
+                <p className="text-sm text-slate-500">Estos campos se completan al redactar el informe final.</p>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="descripcionDano">Observación / descripción del daño</Label>
+                <Textarea id="descripcionDano" rows={3} className="bg-card" placeholder="Describe lo observado: tipo de daño, dimensiones, ubicación exacta…" value={descripcionDano} onChange={(e) => setDescripcionDano(e.target.value)} disabled={completada} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="trabajoRealizar">Trabajo a realizar</Label>
+                <Textarea id="trabajoRealizar" rows={2} className="bg-card" placeholder="ej. Reparación mediante procedimiento X, cambio de pieza, evaluación por fabricante…" value={trabajoRealizar} onChange={(e) => setTrabajoRealizar(e.target.value)} disabled={completada} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="recomendacion">Recomendación</Label>
+                <Textarea id="recomendacion" rows={2} className="bg-card" placeholder="ej. Apoyo con plataforma, sector limpio, repuesto adecuado…" value={recomendacion} onChange={(e) => setRecomendacion(e.target.value)} disabled={completada} />
+              </div>
+
+              {!completada && (
+                <Button type="submit" variant="gradient" className="h-12 w-full text-base" disabled={guardando}>
+                  {guardando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                  Guardar cambios
+                </Button>
+              )}
+            </div>
+          )}
         </div>
-
-        {msg && <div className="mb-3"><Mensaje {...msg} /></div>}
-
-        {!completada && (
-          <Button type="submit" variant="gradient" className="h-12 w-full text-base" disabled={guardando}>
-            {guardando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-            {esNuevo ? 'Guardar y continuar →' : 'Guardar cambios'}
-          </Button>
-        )}
       </form>
 
       {/* Fotos */}
-      {!esNuevo && hallazgo && (
-        <div ref={fotosRef} className={`mt-3 rounded-xl border bg-card p-4 shadow-sm ${destacarFotos ? 'border-brand ring-2 ring-brand/30' : 'border-slate-200'}`}>
+      <div ref={fotosRef} className="mt-3 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
           <h2 className="font-heading text-base font-semibold text-slate-900">Fotografías del daño</h2>
           <p className="-mt-0.5 mb-2 text-sm text-slate-500">Fotos tomadas en terreno que respaldan este hallazgo.</p>
-
-          {destacarFotos && (
-            <div className="mb-2">
-              <Mensaje tipo="ok" texto="Hallazgo guardado ✓ Ahora agrega las fotos del daño." />
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {hallazgo.fotos.map((f) => (
@@ -686,12 +766,10 @@ export default function FindingPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Marcado en diagramas */}
-      {!esNuevo && hallazgo && (
-        <div className="mt-3 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+      <div ref={marcasRef} className={`mt-3 rounded-xl border bg-card p-4 shadow-sm transition-all ${resaltarMarcas ? 'border-brand ring-2 ring-brand/30 animate-pulse' : 'border-slate-200'}`}>
           <h2 className="font-heading text-base font-semibold text-slate-900">Marca la ubicación en el diagrama</h2>
           <p className="-mt-0.5 mb-2 text-sm text-slate-500">
             Toca el punto exacto del diagrama donde se encuentra el daño. Quedará marcado con el N° de este hallazgo.
@@ -773,21 +851,18 @@ export default function FindingPage() {
               {msgMarcas && <div className="mt-2"><Mensaje {...msgMarcas} /></div>}
             </>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Volver */}
-      {!esNuevo && (
-        <Link
-          to={`/inspecciones/${inspeccionId}`}
-          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brand font-heading text-base font-medium text-white transition-colors hover:bg-brand-teal"
-        >
-          {completada ? '← Volver a la inspección' : '✓ Listo, volver a la inspección'}
-        </Link>
-      )}
+      <Link
+        to={`/inspecciones/${inspeccionId}`}
+        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brand font-heading text-base font-medium text-white transition-colors hover:bg-brand-teal"
+      >
+        {completada ? '← Volver a la inspección' : '✓ Listo, volver a la inspección'}
+      </Link>
 
       {/* Eliminar */}
-      {!esNuevo && !completada && (
+      {!completada && (
         <div className="mt-6 border-t border-slate-200 pt-4 text-center">
           <button type="button" onClick={eliminarHallazgo} className="text-sm font-medium text-red-600 hover:underline">
             Eliminar este hallazgo…
