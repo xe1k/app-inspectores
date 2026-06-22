@@ -53,3 +53,24 @@ export function duracionEntre(inicioIso: string | null | undefined, finIso: stri
 export function fechaLocalChile(d = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(d);
 }
+
+/** "Hoy" / "Ayer" / "Hace 3 días" / "Hace 2 semanas" / "Hace 3 meses" / "Hace 1 año" */
+export function tiempoRelativo(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const fecha = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(fecha.getTime())) return '—';
+  const dias = Math.floor((Date.now() - fecha.getTime()) / 86400000);
+  if (dias <= 0) return 'Hoy';
+  if (dias === 1) return 'Ayer';
+  if (dias < 7) return `Hace ${dias} días`;
+  if (dias < 30) {
+    const semanas = Math.floor(dias / 7);
+    return `Hace ${semanas} semana${semanas > 1 ? 's' : ''}`;
+  }
+  if (dias < 365) {
+    const meses = Math.floor(dias / 30);
+    return `Hace ${meses} mes${meses > 1 ? 'es' : ''}`;
+  }
+  const anios = Math.floor(dias / 365);
+  return `Hace ${anios} año${anios > 1 ? 's' : ''}`;
+}

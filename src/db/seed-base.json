@@ -1,0 +1,120 @@
+{
+  "980e": {
+    "modelo": "980E",
+    "tipo": "Chasis",
+    "datos_generales": {
+      "Fabricante": "Komatsu",
+      "Modelos aplicables": "830, 930, 960, 980-5",
+      "Lugar de inspección habitual": "Taller Esperanza Sur",
+      "PSGCC aplicables": "Hipoacusia, Trabajo en altura, Sílice",
+      "END tintas penetrantes (modelo/marca)": "Magnaflux",
+      "END yugo magnético (modelo/marca)": "Yugo Y-2 / Magnaflux",
+      "END ultrasonido — espesores (modelo/marca)": "Meldic, modelo TM210 PLUS"
+    },
+    "paginas_fijas": [
+      {
+        "titulo": "Método de inspección",
+        "contenido": "Inspección visual con apoyo de ensayos no destructivos: tintas penetrantes, yugo magnético y ultrasonido (medición de espesores) según corresponda al sector evaluado.\n\nAntes de realizar la inspección siga las siguientes instrucciones:\n1. Limpiar la zona donde se realiza la inspección.\n2. Realizar la inspección de acuerdo a las áreas indicadas en las figuras.\n3. Si una fisura es encontrada, realice ensayo no destructivo, registre condición y dimensión de esta con su fotografía respectiva.\n4. De acuerdo a los registros del punto anterior, el departamento técnico estructural de faena, en conjunto con PSG estructural, definirán la criticidad de la fisura y su correspondiente procedimiento de reparación.\n\nSectores cubiertos: Inspección chasis principal; Axle Box y barra estabilizadora 930-5; barra de dirección y suspensión delantera; sub-chasis."
+      },
+      {
+        "titulo": "Tabla de ensayos no destructivos (frecuencia por zona)",
+        "contenido": "PT: Tintas penetrantes · MT: Partículas magnéticas · UT: Ultrasonido\n\n• UT — Zona de asentamiento primer PAD de tolva (ZA01LHT, ZA02RHT): 1 vez al año, equipos con horómetro ≥ 20.000.\n• PT o MT — Soldadura Hoist Pin cilindro de levante (HPCL01LH, HPCL02RH): 1 vez al año.\n• PT o MT — Soldadura soporte TK hidráulico (BTKH01, BTKH02): 1 vez al año.\n• PT o MT — Soldadura soporte TK combustible (BTKC01, BTKC02): 1 vez al año.\n• UT — Soldadura Drive Tube parante (ZBDTW01RH, ZBDTW02LH): 1 vez al año.\n• PT o MT — Soldadura Horse Collar (HWC01-04): 1 vez al año.\n• PT o MT — Soldadura de alerones (AW01-06): 1 vez al año.\n• PT o MT — Soldadura Drive Tube chasis (DTW01-04): 1 vez al año.\n• PT o MT — Barra estabilizadora (SB01): 1 vez al año.\n• UT — Soldadura Pivot Mount, caja de aire con mejora (PMW01): 1 vez al año.\n• Ultrasonido — Soldadura Pivot Mount, caja de aire sin mejora (PMW01): 3 veces al año."
+      },
+      {
+        "titulo": "Advertencias técnicas — Axle Box y barra estabilizadora",
+        "contenido": "Axle Box y barra estabilizadora (estándar): en versiones anteriores la escotilla de acceso superior correspondiente al código AH01T no existe.\n\nIMPORTANTE: Fábrica prohíbe la realización de reparaciones por soldadura en cualquier punto de la barra estabilizadora y nose cone (aplica a versión estándar y heavy duty).\n\nBarra de dirección y suspensión delantera — IMPORTANTE: Fábrica prohíbe la realización de reparaciones por soldadura en cualquier punto de la carcasa de la suspensión y barra de dirección."
+      }
+    ],
+    "diagramas": [
+      {
+        "nombre": "Chasis principal — Vista exterior y códigos de zona",
+        "archivo": "diagrama_slide4.png",
+        "orden": 1
+      },
+      {
+        "nombre": "Chasis principal — Vista lateral derecha",
+        "archivo": "diagrama_slide5.png",
+        "orden": 2
+      },
+      {
+        "nombre": "Chasis principal — Vista lateral izquierda",
+        "archivo": "diagrama_slide6.png",
+        "orden": 3
+      },
+      {
+        "nombre": "Alerones y Horse Collar",
+        "archivo": "diagrama_slide7.png",
+        "orden": 4
+      },
+      {
+        "nombre": "Parante y vigas diagonales",
+        "archivo": "diagrama_slide8.png",
+        "orden": 5
+      },
+      {
+        "nombre": "Zona de asentamiento y sistemas hidráulicos",
+        "archivo": "diagrama_slide9.png",
+        "orden": 6
+      },
+      {
+        "nombre": "Sub-chasis — Códigos de zona",
+        "archivo": "diagrama_slide10.png",
+        "orden": 7
+      },
+      {
+        "nombre": "Sub-chasis — Vista general",
+        "archivo": "diagrama_slide11.png",
+        "orden": 8
+      },
+      {
+        "nombre": "Sistemas complementarios y soldaduras",
+        "archivo": "diagrama_slide12.png",
+        "orden": 9
+      }
+    ]
+  },
+  "tolva-dt": {
+    "modelo": "Tolva DT",
+    "tipo": "Tolva",
+    "datos_generales": {
+      "Fabricante": "Komatsu",
+      "Lugar de inspección habitual": "Taller Esperanza Sur",
+      "PSGCC aplicables": "Hipoacusia, Sílice, Trabajo en altura",
+      "END tintas penetrantes (modelo/marca)": "Magnaflux",
+      "END yugo magnético (modelo/marca)": "Yugo Y-2 / Magnaflux",
+      "END ultrasonido — espesores (modelo/marca)": "Meldic, modelo TM210 PLUS"
+    },
+    "paginas_fijas": [
+      {
+        "titulo": "Método de inspección",
+        "contenido": "Inspección visual con apoyo de ensayos no destructivos según corresponda al sector evaluado (tintas penetrantes, yugo magnético, ultrasonido para medición de espesores).\n\nAntes de realizar la inspección, limpiar la zona a inspeccionar y registrar cualquier fisura encontrada con fotografía, dimensión y código del sector, de acuerdo a las áreas indicadas en los diagramas de referencia de esta plantilla."
+      },
+      {
+        "titulo": "Descripción y sectores de la tolva DT",
+        "contenido": "Esta plantilla incluye diagramas de referencia para los siguientes sectores, sobre los que se marca la ubicación exacta de cada hallazgo:\n• Descripción general de la tolva DT.\n• Despiece de sectores de la tolva DT.\n• Piso — armadura de piso.\n• Laterales y revestimiento.\n\nCada vista está cargada como diagrama de referencia; sobre ella se marca/adjunta la evidencia de cada hallazgo."
+      }
+    ],
+    "diagramas": [
+      {
+        "nombre": "Descripción general — Tolva DT",
+        "archivo": "diagrama_tolvadt_descripcion.png",
+        "orden": 0
+      },
+      {
+        "nombre": "Despiece y nomenclatura — Tolva DT",
+        "archivo": "diagrama_tolvadt_despiece.png",
+        "orden": 1
+      },
+      {
+        "nombre": "Piso — armadura de piso",
+        "archivo": "diagrama_tolvadt_piso.png",
+        "orden": 2
+      },
+      {
+        "nombre": "Laterales, revestimiento y accesorios",
+        "archivo": "diagrama_tolvadt_laterales.png",
+        "orden": 3
+      }
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CalendarClock, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,15 @@ interface Plantilla {
   modelo: string;
   tipo: string | null;
 }
+
+interface EquipoResumen {
+  equipo_norm: string;
+  equipo_display: string;
+  modelo: string;
+  tipo: string | null;
+}
+
+const EQUIPO_NUEVO = '__nuevo__';
 
 interface InspeccionCreada {
   id: number;
@@ -106,9 +115,12 @@ function IndicadorGps({ estado }: { estado: EstadoGps }) {
 
 export default function CreateInspectionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [plantillas, setPlantillas] = useState<Plantilla[] | null>(null);
+  const [equipos, setEquipos] = useState<EquipoResumen[] | null>(null);
   const [plantillaId, setPlantillaId] = useState('');
-  const [equipo, setEquipo] = useState('');
+  const [equipoNorm, setEquipoNorm] = useState('');
+  const [equipoNuevo, setEquipoNuevo] = useState('');
   const [ot, setOt] = useState('');
   const [horometro, setHorometro] = useState('');
   const [error, setError] = useState('');
@@ -117,13 +129,36 @@ export default function CreateInspectionPage() {
 
   // Timestamp de inicio: se registra al montar y el inspector no lo edita.
   const fechaInicio = useRef(new Date().toISOString());
+  const precargado = useRef(false);
 
   useEffect(() => {
     apiFetch<Plantilla[]>('/plantillas')
       .then(setPlantillas)
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Error de conexión con el servidor'));
+    apiFetch<EquipoResumen[]>('/equipos')
+      .then(setEquipos)
+      .catch(() => setEquipos([]));
     capturarGps(setGps);
   }, []);
+
+  // Precarga desde la vista de equipo (?equipo=<equipo_norm>): selecciona el
+  // equipo existente y el modelo de plantilla que le corresponde.
+  useEffect(() => {
+    if (precargado.current || !plantillas || !equipos) return;
+    const norm = searchParams.get('equipo');
+    if (!norm) return;
+    const grupo = equipos.find((e) => e.equipo_norm === norm);
+    if (!grupo) return;
+    precargado.current = true;
+    const plantilla = plantillas.find((p) => p.modelo === grupo.modelo);
+    if (plantilla) setPlantillaId(String(plantilla.id));
+    setEquipoNorm(grupo.equipo_norm);
+  }, [plantillas, equipos, searchParams]);
+
+  const plantillaSeleccionada = plantillas?.find((p) => String(p.id) === plantillaId);
+  const equiposFiltrados = (equipos && plantillaSeleccionada)
+    ? equipos.filter((e) => e.modelo === plantillaSeleccionada.modelo)
+    : [];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -134,6 +169,22 @@ export default function CreateInspectionPage() {
       return;
     }
 
+    let equipo: string;
+    if (equipoNorm === EQUIPO_NUEVO) {
+      equipo = equipoNuevo.trim();
+      if (!equipo) {
+        setError('Escribe el nombre del equipo nuevo');
+        return;
+      }
+    } else {
+      const grupo = equiposFiltrados.find((e) => e.equipo_norm === equipoNorm);
+      if (!grupo) {
+        setError('Selecciona un equipo');
+        return;
+      }
+      equipo = grupo.equipo_display;
+    }
+
     setSubmitting(true);
     try {
       const coords = gps.fase === 'ok' ? gps.coords : null;
@@ -141,7 +192,7 @@ export default function CreateInspectionPage() {
         method: 'POST',
         body: JSON.stringify({
           plantilla_id: Number(plantillaId),
-          equipo: equipo.trim(),
+          equipo,
           ot: ot.trim(),
           fecha: fechaLocalChile(),
           horometro: horometro.trim(),
@@ -181,7 +232,15 @@ export default function CreateInspectionPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="plantilla">Modelo de equipo</Label>
-            <Select value={plantillaId} onValueChange={setPlantillaId} disabled={sinPlantillas}>
+            <Select
+              value={plantillaId}
+              onValueChange={(v) => {
+                setPlantillaId(v);
+                setEquipoNorm('');
+                setEquipoNuevo('');
+              }}
+              disabled={sinPlantillas}
+            >
               <SelectTrigger id="plantilla" className="h-11 bg-card">
                 <SelectValue placeholder="Selecciona un modelo…" />
               </SelectTrigger>
@@ -205,14 +264,36 @@ export default function CreateInspectionPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="equipo">Equipo</Label>
-            <Input
-              id="equipo"
-              required
-              placeholder="ej. CAEX-203"
-              className="h-11 bg-card"
-              value={equipo}
-              onChange={(e) => setEquipo(e.target.value)}
-            />
+            <Select
+              value={equipoNorm}
+              onValueChange={(v) => {
+                setEquipoNorm(v);
+                if (v !== EQUIPO_NUEVO) setEquipoNuevo('');
+              }}
+              disabled={!plantillaId}
+            >
+              <SelectTrigger id="equipo" className="h-11 bg-card">
+                <SelectValue placeholder={plantillaId ? 'Selecciona un equipo…' : 'Primero elige el modelo'} />
+              </SelectTrigger>
+              <SelectContent>
+                {equiposFiltrados.map((eq) => (
+                  <SelectItem key={eq.equipo_norm} value={eq.equipo_norm}>
+                    {eq.equipo_display}
+                  </SelectItem>
+                ))}
+                <SelectItem value={EQUIPO_NUEVO}>+ Nuevo equipo</SelectItem>
+              </SelectContent>
+            </Select>
+            {equipoNorm === EQUIPO_NUEVO && (
+              <Input
+                autoFocus
+                required
+                placeholder="ej. CAEX-203"
+                className="mt-1.5 h-11 bg-card"
+                value={equipoNuevo}
+                onChange={(e) => setEquipoNuevo(e.target.value)}
+              />
+            )}
           </div>
 
           <div className="space-y-1.5">

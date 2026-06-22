@@ -72,6 +72,10 @@ export interface DatosHallazgo {
   recursosCantidad: string; // personas (entero como texto del input)
   preexistencia: 'si' | 'no' | null;
   fotos: { archivo: File; preview: string }[];
+  // Informe: se completa en terreno para que no quede trabajo de oficina.
+  descripcionDano: string;
+  trabajoRealizar: string;
+  recomendacion: string;
 }
 
 export const DATOS_INICIALES: DatosHallazgo = {
@@ -88,6 +92,9 @@ export const DATOS_INICIALES: DatosHallazgo = {
   recursosCantidad: '',
   preexistencia: null,
   fotos: [],
+  descripcionDano: '',
+  trabajoRealizar: '',
+  recomendacion: '',
 };
 
 function enteroONull(texto: string, max: number): number | null {
@@ -112,6 +119,9 @@ export function aCuerpoApi(d: DatosHallazgo, inspeccionId: number) {
     tiempo_reparacion: enteroONull(d.tiempoHrs, 999),
     recursos: enteroONull(d.recursosCantidad, 99),
     preexistencia: d.preexistencia,
+    descripcion_dano: d.descripcionDano.trim() || null,
+    trabajo_realizar: d.trabajoRealizar.trim() || null,
+    recomendacion: d.recomendacion.trim() || null,
   };
 }
 

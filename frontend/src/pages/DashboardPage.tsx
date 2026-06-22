@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Loader2, AlertTriangle, Clock, ShieldCheck, Gauge } from 'lucide-react';
+import { Loader2, AlertTriangle, Clock, Gauge } from 'lucide-react';
 import {
   CartesianGrid,
   Legend,
@@ -18,7 +17,6 @@ interface Resumen {
   inspecciones_mes: number;
   hallazgos_criticos_abiertos: number;
   hallazgos_totales_abiertos: number;
-  tasa_cumplimiento: number | null;
   horas_pendientes: number;
   personas_requeridas: number;
 }
@@ -38,7 +36,6 @@ interface SemanaTendencia {
   semana: string;
   inspecciones: number;
   hallazgos_nuevos: number;
-  hallazgos_cerrados: number;
 }
 
 interface InspectorRanking {
@@ -228,7 +225,7 @@ export default function DashboardPage() {
       {resumen && !sinDatos && (
         <>
           {/* KPIs */}
-          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             <button
               type="button"
               onClick={irACriticos}
@@ -236,35 +233,19 @@ export default function DashboardPage() {
             >
               <AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />
               <span className="text-2xl font-bold text-red-700">{resumen.hallazgos_criticos_abiertos}</span>
-              <span className="text-xs font-medium text-red-700">Críticos abiertos</span>
+              <span className="text-xs font-medium text-red-700">Hallazgos críticos</span>
             </button>
 
             <div className="flex flex-col items-start gap-1 rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
               <Gauge className="h-5 w-5 text-amber-600" aria-hidden="true" />
               <span className="text-2xl font-bold text-amber-700">{resumen.hallazgos_totales_abiertos}</span>
-              <span className="text-xs font-medium text-amber-700">Hallazgos abiertos</span>
-            </div>
-
-            <div className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
-              <ShieldCheck className="h-5 w-5 text-brand dark:text-brand-cyan" aria-hidden="true" />
-              <span className="text-2xl font-bold text-slate-900">
-                {resumen.tasa_cumplimiento !== null ? `${resumen.tasa_cumplimiento}%` : '—'}
-              </span>
-              <span className="text-xs font-medium text-slate-500">Tasa de cumplimiento</span>
-              {resumen.tasa_cumplimiento !== null && (
-                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-brand dark:bg-brand-cyan"
-                    style={{ width: `${Math.min(100, Math.max(0, resumen.tasa_cumplimiento))}%` }}
-                  />
-                </div>
-              )}
+              <span className="text-xs font-medium text-amber-700">Hallazgos totales</span>
             </div>
 
             <div className="flex flex-col items-start gap-1 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
               <Clock className="h-5 w-5 text-slate-500" aria-hidden="true" />
               <span className="text-2xl font-bold text-slate-900">{resumen.horas_pendientes}</span>
-              <span className="text-xs font-medium text-slate-500">Horas pendientes</span>
+              <span className="text-xs font-medium text-slate-500">Horas estimadas</span>
               {resumen.personas_requeridas > 0 && (
                 <span className="text-xs text-slate-400">{resumen.personas_requeridas} personas requeridas</span>
               )}
@@ -309,7 +290,6 @@ export default function DashboardPage() {
                       <th className="px-3 py-2 text-right">Críticos</th>
                       <th className="px-3 py-2 text-right">Medios</th>
                       <th className="px-3 py-2 text-right">Bajos</th>
-                      <th className="px-3 py-2 text-right">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,14 +308,6 @@ export default function DashboardPage() {
                         <td className="px-3 py-2 text-right font-bold text-red-600">{e.criticos}</td>
                         <td className="px-3 py-2 text-right font-bold text-amber-600">{e.medios}</td>
                         <td className="px-3 py-2 text-right font-bold text-green-600">{e.bajos}</td>
-                        <td className="px-3 py-2 text-right">
-                          <Link
-                            to={`/seguimiento?equipo=${encodeURIComponent(e.equipo)}`}
-                            className="font-medium text-brand underline-offset-2 hover:underline dark:text-brand-cyan"
-                          >
-                            Ver hallazgos
-                          </Link>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -358,18 +330,10 @@ export default function DashboardPage() {
                     <p className="mb-2 text-sm text-slate-500">
                       {e.modelo || 'Sin modelo'} · Última: {fechaCorta(e.ultima_inspeccion)} · Horómetro {e.horometro_ultimo ?? '—'}
                     </p>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex gap-2 text-xs font-bold">
-                        <span className="text-red-600">{e.criticos} críticos</span>
-                        <span className="text-amber-600">{e.medios} medios</span>
-                        <span className="text-green-600">{e.bajos} bajos</span>
-                      </div>
-                      <Link
-                        to={`/seguimiento?equipo=${encodeURIComponent(e.equipo)}`}
-                        className="whitespace-nowrap font-medium text-brand underline-offset-2 hover:underline dark:text-brand-cyan"
-                      >
-                        Ver hallazgos
-                      </Link>
+                    <div className="flex gap-2 text-xs font-bold">
+                      <span className="text-red-600">{e.criticos} críticos</span>
+                      <span className="text-amber-600">{e.medios} medios</span>
+                      <span className="text-green-600">{e.bajos} bajos</span>
                     </div>
                   </div>
                 ))}
@@ -391,7 +355,6 @@ export default function DashboardPage() {
                     <Legend />
                     <Line type="monotone" dataKey="inspecciones" name="Inspecciones" stroke="#006397" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="hallazgos_nuevos" name="Hallazgos nuevos" stroke="#dc2626" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="hallazgos_cerrados" name="Hallazgos cerrados" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

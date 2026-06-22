@@ -93,10 +93,7 @@ router.get('/resumen', (req, res) => {
      ${fPeriodo.sql}`
   ).get(...fPeriodo.params).n;
 
-  // Hallazgos abiertos actuales (foto del momento, filtrados por equipo/modelo).
-  const condAbiertos = fSnapshot.sql
-    ? `${fSnapshot.sql} AND h.estado != 'verificado'`
-    : "WHERE h.estado != 'verificado'";
+  // Hallazgos registrados (foto del momento, filtrados por equipo/modelo).
   const abiertos = db.prepare(
     `SELECT
        SUM(CASE WHEN h.criticidad = 'alta' THEN 1 ELSE 0 END) AS criticos,
@@ -106,33 +103,14 @@ router.get('/resumen', (req, res) => {
      FROM hallazgos h
      JOIN inspecciones i ON i.id = h.inspeccion_id
      JOIN plantillas_equipo p ON p.id = i.plantilla_id
-     ${condAbiertos}`
+     ${fSnapshot.sql}`
   ).get(...fSnapshot.params);
-
-  // Tasa de cumplimiento: de los hallazgos creados en el período, % ya verificados.
-  const corte = fechaCorte(req.query.periodo);
-  const condicionesTasa = [];
-  const paramsTasa = [...fSnapshot.params];
-  if (fSnapshot.sql) condicionesTasa.push(fSnapshot.sql.replace(/^WHERE /, ''));
-  if (corte) {
-    condicionesTasa.push('COALESCE(h.fecha_creacion, h.creado_en) >= ?');
-    paramsTasa.push(corte);
-  }
-  const whereTasa = condicionesTasa.length ? `WHERE ${condicionesTasa.join(' AND ')}` : '';
-  const tasa = db.prepare(
-    `SELECT COUNT(*) AS total, SUM(CASE WHEN h.estado = 'verificado' THEN 1 ELSE 0 END) AS verificados
-     FROM hallazgos h
-     JOIN inspecciones i ON i.id = h.inspeccion_id
-     JOIN plantillas_equipo p ON p.id = i.plantilla_id
-     ${whereTasa}`
-  ).get(...paramsTasa);
 
   const resultado = {
     total_equipos: totalEquipos,
     inspecciones_mes: inspeccionesPeriodo,
     hallazgos_criticos_abiertos: abiertos.criticos || 0,
     hallazgos_totales_abiertos: abiertos.total || 0,
-    tasa_cumplimiento: tasa.total > 0 ? Math.round((tasa.verificados / tasa.total) * 100) : null,
     horas_pendientes: Math.round(abiertos.horas || 0),
     personas_requeridas: Math.round(abiertos.personas || 0),
   };
@@ -148,13 +126,16 @@ router.get('/equipos', (req, res) => {
 
   const f = filtroInspecciones(req, { incluirPeriodo: false });
 
-  // Última inspección por equipo (modelo, fecha, horómetro).
+  // Última inspección por equipo (modelo, fecha, horómetro). Orden por DÍA
+  // (no por timestamp) + id DESC: la base guarda fecha_inicio con hora y la
+  // revisión solo `fecha`, así que comparar el texto crudo desordenaría las
+  // del mismo día (ver src/routes/equipos.js).
   const filas = db.prepare(
-    `SELECT i.equipo, p.modelo, i.fecha_inicio, i.fecha, i.horometro
+    `SELECT i.id, i.equipo, p.modelo, i.fecha_inicio, i.fecha, i.horometro
      FROM inspecciones i
      JOIN plantillas_equipo p ON p.id = i.plantilla_id
      ${f.sql}
-     ORDER BY COALESCE(i.fecha_inicio, i.fecha) DESC`
+     ORDER BY date(COALESCE(i.fecha_inicio, i.fecha)) DESC, i.id DESC`
   ).all(...f.params);
 
   const porEquipo = new Map();
@@ -172,14 +153,13 @@ router.get('/equipos', (req, res) => {
     }
   }
 
-  // Hallazgos abiertos por equipo y criticidad.
-  const condH = f.sql ? `${f.sql} AND h.estado != 'verificado'` : "WHERE h.estado != 'verificado'";
+  // Hallazgos por equipo y criticidad.
   const hallazgos = db.prepare(
     `SELECT i.equipo, h.criticidad, COUNT(*) AS n
      FROM hallazgos h
      JOIN inspecciones i ON i.id = h.inspeccion_id
      JOIN plantillas_equipo p ON p.id = i.plantilla_id
-     ${condH}
+     ${f.sql}
      GROUP BY i.equipo, h.criticidad`
   ).all(...f.params);
 
@@ -227,7 +207,7 @@ function generarSemanas(n) {
     inicio.setDate(inicio.getDate() - i * 7);
     const fin = new Date(inicio);
     fin.setDate(fin.getDate() + 7);
-    semanas.push({ inicio, fin, semana: `Sem ${numeroSemanaISO(inicio)}`, inspecciones: 0, hallazgos_nuevos: 0, hallazgos_cerrados: 0 });
+    semanas.push({ inicio, fin, semana: `Sem ${numeroSemanaISO(inicio)}`, inspecciones: 0, hallazgos_nuevos: 0 });
   }
   return semanas;
 }
@@ -272,23 +252,13 @@ router.get('/tendencia', (req, res) => {
      WHERE ${prefijo}COALESCE(h.fecha_creacion, h.creado_en) >= ?`
   ).all(...params);
 
-  const filasCerrados = db.prepare(
-    `SELECT h.fecha_estado_cambio AS fecha
-     FROM hallazgos h
-     JOIN inspecciones i ON i.id = h.inspeccion_id
-     JOIN plantillas_equipo p ON p.id = i.plantilla_id
-     WHERE ${prefijo}h.estado = 'verificado' AND h.fecha_estado_cambio >= ?`
-  ).all(...params);
-
   asignarASemana(semanas, filasInsp, 'inspecciones');
   asignarASemana(semanas, filasNuevos, 'hallazgos_nuevos');
-  asignarASemana(semanas, filasCerrados, 'hallazgos_cerrados');
 
-  const resultado = semanas.map(({ semana, inspecciones, hallazgos_nuevos, hallazgos_cerrados }) => ({
+  const resultado = semanas.map(({ semana, inspecciones, hallazgos_nuevos }) => ({
     semana,
     inspecciones,
     hallazgos_nuevos,
-    hallazgos_cerrados,
   }));
 
   cacheSet(key, resultado);

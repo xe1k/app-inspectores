@@ -9,12 +9,6 @@ const { formatHoras, formatPersonas } = require('./utils/formatHallazgo');
 const MIME_POR_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 const ETIQUETAS_CRITICIDAD = { alta: 'Alta', media: 'Media', baja: 'Baja' };
-const ETIQUETAS_ESTADO_CICLO = {
-  detectado: 'Detectado',
-  en_reparacion: 'En reparación',
-  resuelto: 'Resuelto',
-  verificado: 'Verificado ✓'
-};
 const ETIQUETAS_PREEXISTENCIA = { si: 'Sí', no: 'No', na: 'No aplica / sin datos previos' };
 
 function imagenComoDataUri(rutaAbs) {
@@ -274,22 +268,6 @@ const ESTILOS = `
   .pill-criticidad.media { background: #fef3c7; color: #92400e; }
   .pill-criticidad.baja  { background: #dcfce7; color: #15803d; }
 
-  .pill-estado {
-    padding: 3px 12px; border-radius: 999px; white-space: nowrap;
-    font-size: 8.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-  }
-  .pill-estado.detectado     { background: #fee2e2; color: #ef4444; }
-  .pill-estado.en_reparacion { background: #fef3c7; color: #b45309; }
-  .pill-estado.resuelto      { background: #dbeafe; color: #3b82f6; }
-  .pill-estado.verificado    { background: #dcfce7; color: #16a34a; }
-  .sello-verificado {
-    display: inline-block; margin: 4px 0 6px; padding: 5px 14px;
-    border: 2.5px solid #22c55e; border-radius: 6px; color: #15803d;
-    font-size: 10pt; font-weight: 800; letter-spacing: .06em;
-    transform: rotate(-2deg);
-  }
-  .estado-fecha { font-size: 8.5pt; color: #6b7280; margin-left: 6px; }
-
   .th-campos p.campo { margin-bottom: 3px; font-size: 10pt; line-height: 1.45; }
   .th-campos p.campo b { color: #1e3a5f; font-weight: 700; }
   .th-dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 20px; }
@@ -534,9 +512,7 @@ function tarjetaHallazgo(h) {
         <span class="th-num">N°${esc(String(h.numero))}</span>
         <span class="th-ubicacion">${esc(ubicacion) || '—'}</span>
         <span class="pill-criticidad ${esc(h.criticidad)}">Criticidad ${ETIQUETAS_CRITICIDAD[h.criticidad] || esc(h.criticidad)}</span>
-        <span class="pill-estado ${esc(h.estado || 'detectado')}">${ETIQUETAS_ESTADO_CICLO[h.estado] || 'Detectado'}</span>${h.fecha_estado_cambio ? `<span class="estado-fecha">${esc(String(h.fecha_estado_cambio).slice(0, 10).split('-').reverse().join('-'))}</span>` : ''}
       </div>
-      ${h.estado === 'verificado' ? '<div class="sello-verificado">REPARACIÓN VERIFICADA ✓</div>' : ''}
       <div class="th-campos">
         ${h.tipo_dano && h.tipo_dano.trim() ? `<p class="campo"><b>Tipo de daño:</b> ${esc(h.tipo_dano)}</p>` : ''}
         ${h.descripcion_dano && h.descripcion_dano.trim() ? `<p class="campo"><b>Descripción del daño:</b> ${conSaltosDeLinea(h.descripcion_dano)}</p>` : ''}

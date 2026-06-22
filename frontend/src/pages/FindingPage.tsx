@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import EstadoHallazgo from '@/components/EstadoHallazgo';
 import PhotoEditorDialog, { type PhotoEditorResult } from '@/components/PhotoEditorDialog';
 import ZonaSelector, { type Zona } from '@/components/ZonaSelector';
+import DiagramaMarcador, { type Diagrama } from '@/components/DiagramaMarcador';
 import { formatHoras, formatPersonas, parseCantidad } from '@/lib/formatHallazgo';
 import { apiFetch, apiUpload, ApiError } from '@/lib/api';
 import { compressImage } from '@/lib/compressImage';
@@ -33,8 +33,6 @@ interface Hallazgo {
   preexistencia: 'si' | 'no' | 'na' | string | null;
   tipo_dano: string | null;
   zona_id: number | null;
-  estado: string | null;
-  fecha_estado_cambio: string | null;
   sistema: string | null;
   sector: string | null;
   codigo: string | null;
@@ -52,13 +50,6 @@ interface Inspeccion {
   equipo: string;
   estado: 'en_curso' | 'completada' | string;
   plantilla_id: number;
-}
-
-interface Diagrama {
-  id: number;
-  nombre: string;
-  archivo: string;
-  orden: number;
 }
 
 interface Plantilla {
@@ -106,7 +97,6 @@ export default function FindingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fotosRef = useRef<HTMLDivElement>(null);
   const marcasRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
   const aplicoMarcarRef = useRef(false);
 
   const [hallazgo, setHallazgo] = useState<Hallazgo | null>(null);
@@ -400,17 +390,6 @@ export default function FindingPage() {
     }
   }
 
-  function handleLienzoClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (completada) return;
-    const img = imgRef.current;
-    if (!img || e.target !== img) return;
-    const rect = img.getBoundingClientRect();
-    const x_pct = ((e.clientX - rect.left) / rect.width) * 100;
-    const y_pct = ((e.clientY - rect.top) / rect.height) * 100;
-    if (x_pct < 0 || x_pct > 100 || y_pct < 0 || y_pct > 100) return;
-    agregarMarca(x_pct, y_pct);
-  }
-
   if (loadError) {
     return (
       <div>
@@ -436,8 +415,6 @@ export default function FindingPage() {
 
   const completada = inspeccion.estado === 'completada';
   const diagramas = plantilla.diagramas || [];
-  const diagramaSeleccionado = diagramas.find((d) => d.id === diagramaActivo) || null;
-  const marcasDelDiagrama = (hallazgo?.marcas || []).filter((m) => m.diagrama_id === diagramaActivo);
 
   // Selector de zonas: solo si la plantilla tiene catálogo y los valores del
   // hallazgo calzan con él (datos antiguos de texto libre siguen en inputs).
@@ -466,24 +443,15 @@ export default function FindingPage() {
         Hallazgo N°{hallazgo.numero} — {inspeccion.equipo}
       </h1>
 
-      {/* Ciclo de vida: estado rastreable (la criticidad es fija y vive en el formulario) */}
-      <div className="mb-4 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          {criticidad && (
-            <span className={`whitespace-nowrap rounded-full border-2 px-3 py-1.5 text-sm font-bold ${
-              CRITICIDADES.find((c) => c.valor === criticidad)?.activo || 'border-slate-200 text-slate-700'
-            }`}>
-              Criticidad {CRITICIDADES.find((c) => c.valor === criticidad)?.etiqueta}
-            </span>
-          )}
-          <EstadoHallazgo
-            hallazgoId={hallazgo.id}
-            estado={hallazgo.estado}
-            conHistorial
-            onCambio={(h) => setHallazgo({ ...hallazgo, estado: h.estado, fecha_estado_cambio: h.fecha_estado_cambio })}
-          />
+      {criticidad && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+          <span className={`inline-block whitespace-nowrap rounded-full border-2 px-3 py-1.5 text-sm font-bold ${
+            CRITICIDADES.find((c) => c.valor === criticidad)?.activo || 'border-slate-200 text-slate-700'
+          }`}>
+            Criticidad {CRITICIDADES.find((c) => c.valor === criticidad)?.etiqueta}
+          </span>
         </div>
-      </div>
+      )}
 
       {msg && <div className="mb-3"><Mensaje {...msg} /></div>}
 
@@ -775,82 +743,23 @@ export default function FindingPage() {
             Toca el punto exacto del diagrama donde se encuentra el daño. Quedará marcado con el N° de este hallazgo.
           </p>
 
-          {diagramas.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Esta plantilla todavía no tiene diagramas de referencia cargados. Puedes agregarlos desde{' '}
-              <Link to={`/plantillas/${plantilla.id}`} className="text-brand dark:text-brand-cyan underline">
-                Plantillas de equipo
-              </Link>
-              .
-            </p>
-          ) : (
-            <>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {diagramas.map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setDiagramaActivo(d.id)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
-                      diagramaActivo === d.id ? 'bg-brand text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {d.nombre}
-                  </button>
-                ))}
-              </div>
+          <DiagramaMarcador
+            plantillaId={plantilla.id}
+            diagramas={diagramas}
+            diagramaActivo={diagramaActivo}
+            onSeleccionarDiagrama={setDiagramaActivo}
+            marcas={hallazgo.marcas}
+            onAgregarMarca={agregarMarca}
+            onEliminarMarca={(m) => { if (m.id != null) eliminarMarca(m.id); }}
+            zonaConCoordenadas={zonaConCoordenadas}
+            etiquetaMarca={hallazgo.numero}
+            readOnly={completada}
+            ayuda={completada
+              ? 'Esta inspección está completada; las marcas no se pueden modificar.'
+              : `Toca sobre la imagen para marcar dónde se encuentra el hallazgo N°${hallazgo.numero}. Toca una marca existente para eliminarla.`}
+          />
 
-              {diagramaSeleccionado && (
-                <div
-                  onClick={handleLienzoClick}
-                  className={`relative inline-block w-full overflow-hidden rounded-lg border border-slate-200 ${completada ? '' : 'cursor-crosshair'}`}
-                >
-                  <img
-                    ref={imgRef}
-                    src={`/api/plantillas/${plantilla.id}/diagramas/${diagramaSeleccionado.id}/imagen`}
-                    alt={diagramaSeleccionado.nombre}
-                    draggable={false}
-                    className="block w-full select-none"
-                  />
-                  {marcasDelDiagrama.map((m) => (
-                    <div
-                      key={m.id}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        if (!completada) eliminarMarca(m.id);
-                      }}
-                      title={completada ? undefined : 'Toca para eliminar esta marca'}
-                      style={{ left: `${m.x_pct}%`, top: `${m.y_pct}%` }}
-                      className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-red-600 text-sm font-extrabold text-white shadow ${
-                        completada ? '' : 'cursor-pointer'
-                      }`}
-                    >
-                      {hallazgo.numero}
-                    </div>
-                  ))}
-                  {/* Referencia de la zona elegida (no es una marca; solo orienta al inspector) */}
-                  {zonaConCoordenadas && zonaConCoordenadas.diagrama_id === diagramaActivo && (
-                    <span
-                      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
-                      style={{ left: `${zonaConCoordenadas.coord_x! * 100}%`, top: `${zonaConCoordenadas.coord_y! * 100}%` }}
-                      aria-hidden="true"
-                    >
-                      <span className="absolute -left-4 -top-4 h-8 w-8 animate-ping rounded-full bg-brand opacity-50" />
-                      <span className="absolute -left-2 -top-2 h-4 w-4 rounded-full border-2 border-white bg-brand shadow" />
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <p className="mt-2 text-sm text-slate-500">
-                {completada
-                  ? 'Esta inspección está completada; las marcas no se pueden modificar.'
-                  : `Toca sobre la imagen para marcar dónde se encuentra el hallazgo N°${hallazgo.numero}. Toca una marca existente para eliminarla.`}
-              </p>
-
-              {msgMarcas && <div className="mt-2"><Mensaje {...msgMarcas} /></div>}
-            </>
-          )}
+          {msgMarcas && <div className="mt-2"><Mensaje {...msgMarcas} /></div>}
       </div>
 
       {/* Volver */}

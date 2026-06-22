@@ -1,0 +1,43 @@
+# Despliegue en una VM (Oracle Cloud Always Free u otra) con HTTPS automático.
+# - app:   el servidor Express + la BD SQLite (datos en ./data, persistente).
+# - caddy: reverse proxy que obtiene y renueva el certificado HTTPS solo
+#          (Let's Encrypt) para el dominio que pongas en .env (DOMINIO).
+#
+# Uso en la VM:  docker compose up -d --build
+# Variables (clave de sesión, admin, dominio) van en el archivo .env (ver .env.example).
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE}
+    volumes:
+      # La base de datos y las fotos/diagramas viven aquí y persisten en el disco de la VM.
+      - ./data:/app/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

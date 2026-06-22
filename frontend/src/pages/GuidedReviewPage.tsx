@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Camera, Check, Loader2, X } from 'lucide-react';
+import { Camera, Check, Loader2, Lock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import PhotoEditorDialog, { type PhotoEditorResult } from '@/components/PhotoEditorDialog';
+import FirmarInspeccionDialog from '@/components/FirmarInspeccionDialog';
+import { type Zona } from '@/components/ZonaSelector';
+import { type Diagrama } from '@/components/DiagramaMarcador';
+import HallazgoWizardForm, { type ExitoHallazgo } from '@/components/hallazgo-wizard/HallazgoWizardForm';
 import { apiFetch, apiUpload, ApiError } from '@/lib/api';
 
 interface Foto {
@@ -32,13 +35,15 @@ interface HallazgoRevision {
 interface Inspeccion {
   id: number;
   equipo: string;
+  ot: string | null;
   estado: string;
   inspeccion_base_id: number | null;
   foto_portada: string | null;
+  plantilla_id: number;
   hallazgos: { id: number }[];
 }
 
-type Fase = 'portada' | 'revisar' | 'nuevos' | 'fotosNuevo' | 'listo';
+type Fase = 'portada' | 'revisar' | 'nuevos' | 'listo';
 
 const CRITICIDAD_LABEL: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 const CRITICIDAD_COLOR: Record<string, string> = { alta: '#b91c1c', media: '#d97706', baja: '#15803d' };
@@ -46,11 +51,6 @@ const CRITICIDAD_BADGE: Record<string, string> = {
   alta: 'bg-red-100 text-red-600',
   media: 'bg-amber-100 text-amber-800',
   baja: 'bg-green-100 text-green-600',
-};
-const CRITICIDAD_ACTIVO: Record<string, string> = {
-  alta: 'border-red-600 bg-red-100 text-red-600',
-  media: 'border-amber-500 bg-amber-100 text-amber-800',
-  baja: 'border-green-600 bg-green-100 text-green-600',
 };
 
 interface MensajeProps {
@@ -79,6 +79,8 @@ export default function GuidedReviewPage() {
 
   const [insp, setInsp] = useState<Inspeccion | null>(null);
   const [hallazgos, setHallazgos] = useState<HallazgoRevision[]>([]);
+  const [zonas, setZonas] = useState<Zona[]>([]);
+  const [diagramas, setDiagramas] = useState<Diagrama[]>([]);
   const [loadError, setLoadError] = useState('');
 
   const [fase, setFase] = useState<Fase>('portada');
@@ -87,19 +89,9 @@ export default function GuidedReviewPage() {
   const [guardandoPaso, setGuardandoPaso] = useState(false);
   const [msgPaso, setMsgPaso] = useState<MensajeProps | null>(null);
 
-  const [hallazgoNuevoId, setHallazgoNuevoId] = useState<number | null>(null);
-  const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
-  const [nhSistema, setNhSistema] = useState('');
-  const [nhSector, setNhSector] = useState('');
-  const [nhCriticidad, setNhCriticidad] = useState<'alta' | 'media' | 'baja'>('media');
-  const [nhDesc, setNhDesc] = useState('');
-  const [nhTrabajo, setNhTrabajo] = useState('');
-  const [nhRecom, setNhRecom] = useState('');
-  const [nhMsg, setNhMsg] = useState<MensajeProps | null>(null);
-  const [guardandoNuevo, setGuardandoNuevo] = useState(false);
+  const [mostrarWizard, setMostrarWizard] = useState(false);
 
-  const [completando, setCompletando] = useState(false);
-  const [msgFinal, setMsgFinal] = useState<MensajeProps | null>(null);
+  const [modalFirmaAbierto, setModalFirmaAbierto] = useState(false);
 
   const [fotoVersion, setFotoVersion] = useState(0);
   const [subiendoPortada, setSubiendoPortada] = useState(false);
@@ -121,6 +113,17 @@ export default function GuidedReviewPage() {
       setInsp(i);
       setHallazgos(hs);
       setNota(hs[0]?.nota_revision || '');
+      try {
+        setZonas(await apiFetch<Zona[]>(`/plantillas/${i.plantilla_id}/zonas`));
+      } catch {
+        setZonas([]);
+      }
+      try {
+        const plant = await apiFetch<{ id: number; diagramas: Diagrama[] }>(`/plantillas/${i.plantilla_id}`);
+        setDiagramas(plant.diagramas || []);
+      } catch {
+        setDiagramas([]);
+      }
     } catch (e) {
       setLoadError(e instanceof ApiError ? e.message : 'Error de conexión con el servidor');
     }
@@ -243,56 +246,20 @@ export default function GuidedReviewPage() {
     }
   }
 
-  function abrirFormNuevo() {
-    setNhSistema('');
-    setNhSector('');
-    setNhCriticidad('media');
-    setNhDesc('');
-    setNhTrabajo('');
-    setNhRecom('');
-    setNhMsg(null);
-    setMostrarFormNuevo(true);
-  }
-
-  async function guardarNuevoHallazgo() {
-    setGuardandoNuevo(true);
-    setNhMsg({ tipo: 'ok', texto: 'Guardando…' });
+  async function manejarHallazgoGuardado(exito: ExitoHallazgo) {
     try {
-      const nuevo = await apiFetch<HallazgoRevision>('/hallazgos', {
-        method: 'POST',
-        body: JSON.stringify({
-          inspeccion_id: Number(id),
-          sistema: nhSistema.trim(),
-          sector: nhSector.trim(),
-          criticidad: nhCriticidad,
-          descripcion_dano: nhDesc.trim(),
-          trabajo_realizar: nhTrabajo.trim(),
-          recomendacion: nhRecom.trim(),
-          preexistencia: 'no',
-          estado_revision: 'nuevo',
-        }),
+      const nuevo = await apiFetch<HallazgoRevision>(`/hallazgos/${exito.hallazgoId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ estado_revision: 'nuevo' }),
       });
       setHallazgos((prev) => [...prev, nuevo]);
-      setHallazgoNuevoId(nuevo.id);
-      setMostrarFormNuevo(false);
-      setFase('fotosNuevo');
-    } catch (e) {
-      setNhMsg({ tipo: 'error', texto: e instanceof ApiError ? e.message : 'Error de conexión con el servidor' });
-    } finally {
-      setGuardandoNuevo(false);
+    } catch {
+      // si falla, el hallazgo ya quedó guardado en el servidor (sin marcar como "nuevo")
     }
   }
 
-  async function completarInspeccion() {
-    setCompletando(true);
-    setMsgFinal(null);
-    try {
-      await apiFetch(`/inspecciones/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'completada' }) });
-      navigate(`/inspecciones/${id}`);
-    } catch (e) {
-      setMsgFinal({ tipo: 'error', texto: e instanceof ApiError ? e.message : 'Error de conexión con el servidor' });
-      setCompletando(false);
-    }
+  function handleFirmada() {
+    navigate(`/inspecciones/${id}`);
   }
 
   if (loadError) {
@@ -445,18 +412,25 @@ export default function GuidedReviewPage() {
 
             {fotosAnt.length > 0 && (
               <>
-                <p className="mb-1.5 mt-3 text-xs font-bold uppercase tracking-wide text-slate-400">Fotos de la inspección anterior</p>
+                <p className="mb-1.5 mt-3 flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+                  <Lock className="h-3 w-3" aria-hidden="true" />
+                  Referencia: inspección anterior (solo lectura)
+                </p>
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {fotosAnt.map((f) => {
                     const src = `/api/hallazgos/${h.hallazgo_origen_id}/fotos/${f.id}/imagen`;
                     return (
-                      <img
-                        key={f.id}
-                        src={src}
-                        alt="Foto de la inspección anterior"
-                        className="h-[72px] w-[72px] cursor-zoom-in rounded-md border border-slate-200 object-cover"
-                        onClick={() => setFotoAmpliada(src)}
-                      />
+                      <div key={f.id} className="relative h-[72px] w-[72px]">
+                        <img
+                          src={src}
+                          alt="Foto de la inspección anterior (referencia, solo lectura)"
+                          className="h-full w-full cursor-zoom-in rounded-md border border-slate-200 object-cover opacity-70"
+                          onClick={() => setFotoAmpliada(src)}
+                        />
+                        <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-500 text-white shadow">
+                          <Lock className="h-3 w-3" aria-hidden="true" />
+                        </span>
+                      </div>
                     );
                   })}
                 </div>
@@ -547,6 +521,24 @@ export default function GuidedReviewPage() {
 
   function renderNuevos() {
     const nuevos = hallazgos.filter((h) => h.estado_revision === 'nuevo');
+
+    if (mostrarWizard) {
+      return (
+        <HallazgoWizardForm
+          inspeccionId={id!}
+          zonas={zonas}
+          diagramas={diagramas}
+          plantillaId={insp?.plantilla_id ?? null}
+          onGuardado={manejarHallazgoGuardado}
+          accionesExito={(_exito, _agregarOtro) => (
+            <Button type="button" variant="outline" className="h-12 w-full" onClick={() => { setMostrarWizard(false); setFase('listo'); }}>
+              Continuar / Finalizar revisión
+            </Button>
+          )}
+        />
+      );
+    }
+
     return (
       <>
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
@@ -559,16 +551,14 @@ export default function GuidedReviewPage() {
             </p>
             {nuevos.length > 0 && <p className="mb-3 text-sm text-slate-500">{nuevos.length} nuevo(s) ya registrado(s).</p>}
 
-            {!mostrarFormNuevo && (
-              <div className="flex flex-wrap gap-2.5">
-                <Button type="button" variant="gradient" className="h-12" onClick={abrirFormNuevo}>
-                  + Agregar hallazgo
-                </Button>
-                <Button type="button" variant="outline" className="h-12" onClick={() => setFase('listo')}>
-                  No hay nuevos — Finalizar
-                </Button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2.5">
+              <Button type="button" variant="gradient" className="h-12" onClick={() => setMostrarWizard(true)}>
+                + Agregar hallazgo
+              </Button>
+              <Button type="button" variant="outline" className="h-12" onClick={() => setFase('listo')}>
+                No hay nuevos — Finalizar
+              </Button>
+            </div>
 
             {nuevos.length > 0 && (
               <div className="mt-4 divide-y divide-slate-200">
@@ -585,123 +575,10 @@ export default function GuidedReviewPage() {
                 ))}
               </div>
             )}
-
-            {mostrarFormNuevo && (
-              <div className="mt-4 border-t border-slate-200 pt-4">
-                <h3 className="mb-2 font-heading text-base font-semibold text-slate-900">Nuevo hallazgo</h3>
-                <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="nh-sistema">Sistema</Label>
-                    <Input id="nh-sistema" className="h-11 bg-card" placeholder="Ej: Estructura" value={nhSistema} onChange={(e) => setNhSistema(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="nh-sector">Sector</Label>
-                    <Input id="nh-sector" className="h-11 bg-card" placeholder="Ej: Larguero" value={nhSector} onChange={(e) => setNhSector(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="mb-3 space-y-1.5">
-                  <Label>Criticidad</Label>
-                  <div className="flex gap-2.5">
-                    {(['alta', 'media', 'baja'] as const).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setNhCriticidad(c)}
-                        className={`flex h-12 flex-1 items-center justify-center rounded-lg border-2 font-heading text-sm font-bold transition-colors ${
-                          nhCriticidad === c ? CRITICIDAD_ACTIVO[c] : 'border-slate-200 bg-card text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        {CRITICIDAD_LABEL[c]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-3 space-y-1.5">
-                  <Label htmlFor="nh-desc">Descripción del daño</Label>
-                  <Textarea id="nh-desc" rows={3} placeholder="Describe el daño encontrado…" value={nhDesc} onChange={(e) => setNhDesc(e.target.value)} />
-                </div>
-                <div className="mb-3 space-y-1.5">
-                  <Label htmlFor="nh-trabajo">Trabajo a realizar</Label>
-                  <Textarea id="nh-trabajo" rows={2} placeholder="Soldadura, cambio de componente…" value={nhTrabajo} onChange={(e) => setNhTrabajo(e.target.value)} />
-                </div>
-                <div className="mb-3 space-y-1.5">
-                  <Label htmlFor="nh-recom">Recomendación</Label>
-                  <Textarea id="nh-recom" rows={2} value={nhRecom} onChange={(e) => setNhRecom(e.target.value)} />
-                </div>
-
-                <p className="mb-2 text-sm text-slate-500">Después de guardar podrás agregar las fotos del daño.</p>
-
-                {nhMsg && (
-                  <div className="mb-2">
-                    <Mensaje {...nhMsg} />
-                  </div>
-                )}
-
-                <div className="flex gap-2.5">
-                  <Button type="button" variant="outline" className="h-12 flex-1" onClick={() => setMostrarFormNuevo(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="button" variant="gradient" className="h-12 flex-1" onClick={guardarNuevoHallazgo} disabled={guardandoNuevo}>
-                    {guardandoNuevo ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-                    Guardar y continuar →
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
         {linkSalir}
       </>
-    );
-  }
-
-  function renderFotosNuevo() {
-    const h = hallazgos.find((x) => x.id === hallazgoNuevoId);
-    if (!h) {
-      return (
-        <div className="flex justify-center py-10">
-          <Loader2 className="h-7 w-7 animate-spin text-brand dark:text-brand-cyan" aria-hidden="true" />
-        </div>
-      );
-    }
-    const fotos = h.fotos || [];
-    return (
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
-        <div className="flex items-center gap-1.5 bg-green-700 px-4 py-3">
-          <Check className="h-4 w-4 text-white" aria-hidden="true" />
-          <span className="text-sm font-bold uppercase tracking-wide text-white">Hallazgo guardado</span>
-        </div>
-        <div className="p-4">
-          <p className="mb-3 text-sm text-slate-700">Ahora agrega las fotos del daño (puedes tomar varias):</p>
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {fotos.map((f) => {
-              const src = `/api/hallazgos/${h.id}/fotos/${f.id}/imagen?t=${fotoVersion}`;
-              return (
-                <div key={f.id} className="relative h-[72px] w-[72px]">
-                  <img src={src} alt="Foto del hallazgo nuevo" className="h-full w-full cursor-zoom-in rounded-md border border-slate-200 object-cover" onClick={() => setFotoAmpliada(src)} />
-                  <button
-                    type="button"
-                    onClick={() => eliminarFoto(h.id, f.id)}
-                    title="Quitar"
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow"
-                  >
-                    <X className="h-3 w-3" aria-hidden="true" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <Button type="button" variant="outline" className="mb-3 h-11 w-full" onClick={() => abrirCamara(h.id)} disabled={subiendoFoto}>
-            {subiendoFoto ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Camera className="h-4 w-4" aria-hidden="true" />}
-            Agregar foto
-          </Button>
-          <Button type="button" variant="gradient" className="h-12 w-full" onClick={() => setFase('nuevos')}>
-            {fotos.length ? 'Listo, continuar →' : 'Continuar sin fotos →'}
-          </Button>
-        </div>
-      </div>
     );
   }
 
@@ -713,14 +590,8 @@ export default function GuidedReviewPage() {
         </div>
         <div className="p-4">
           <p className="mb-4 text-sm text-slate-700">Revisados {hallazgos.filter((h) => h.estado_revision).length} hallazgos.</p>
-          {msgFinal && (
-            <div className="mb-3">
-              <Mensaje {...msgFinal} />
-            </div>
-          )}
-          <Button type="button" variant="gradient" className="h-12 w-full" onClick={completarInspeccion} disabled={completando}>
-            {completando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-            Completar inspección
+          <Button type="button" variant="gradient" className="h-12 w-full" onClick={() => setModalFirmaAbierto(true)}>
+            Finalizar inspección
           </Button>
           <Button type="button" variant="outline" className="mt-2.5 h-12 w-full" onClick={() => setFase('nuevos')}>
             ← Volver
@@ -737,7 +608,6 @@ export default function GuidedReviewPage() {
       {fase === 'portada' && renderPortada()}
       {fase === 'revisar' && renderRevisar()}
       {fase === 'nuevos' && renderNuevos()}
-      {fase === 'fotosNuevo' && renderFotosNuevo()}
       {fase === 'listo' && renderListo()}
 
       <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFotoChange} />
@@ -749,6 +619,16 @@ export default function GuidedReviewPage() {
           <img src={fotoAmpliada} alt="" className="max-h-[96vh] max-w-[96vw] rounded-lg object-contain" />
         </div>
       )}
+
+      <FirmarInspeccionDialog
+        open={modalFirmaAbierto}
+        onOpenChange={setModalFirmaAbierto}
+        inspeccionId={id!}
+        equipo={insp.equipo}
+        ot={insp.ot}
+        numHallazgos={hallazgos.length}
+        onFirmado={handleFirmada}
+      />
     </div>
   );
 }

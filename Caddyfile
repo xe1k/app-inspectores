@@ -1,0 +1,6 @@
+# Caddy obtiene y renueva el certificado HTTPS automáticamente (Let's Encrypt)
+# para el dominio indicado en la variable DOMINIO (definida en .env).
+# Reenvía todo el tráfico al servidor de la app en el puerto 3000.
+{$DOMINIO} {
+	reverse_proxy app:3000
+}

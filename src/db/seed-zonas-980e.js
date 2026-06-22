@@ -1,7 +1,6 @@
 // Seed de zonas técnicas del modelo 980E Chasis, extraídas del diagrama real.
 // Ejecutar con: node src/db/seed-zonas-980e.js
 // Es idempotente: si la plantilla ya tiene zonas, no hace nada.
-const db = require('./index');
 
 const SISTEMA = 'Chasis principal';
 
@@ -64,34 +63,40 @@ function criticidadPara(codigo) {
   return codigo.startsWith('ZA') ? 'alta' : null;
 }
 
-const plantilla = db.prepare(
-  "SELECT id, modelo, tipo FROM plantillas_equipo WHERE modelo LIKE '%980E%' ORDER BY id LIMIT 1"
-).get();
+function seed(db) {
+  const plantilla = db.prepare(
+    "SELECT id, modelo, tipo FROM plantillas_equipo WHERE modelo LIKE '%980E%' ORDER BY id LIMIT 1"
+  ).get();
 
-if (!plantilla) {
-  console.log('No se encontró una plantilla 980E; no se cargaron zonas.');
-  process.exit(0);
-}
-
-const existentes = db.prepare('SELECT COUNT(*) AS n FROM zonas WHERE plantilla_id = ?').get(plantilla.id).n;
-if (existentes > 0) {
-  console.log(`La plantilla ${plantilla.modelo} (id ${plantilla.id}) ya tiene ${existentes} zonas; no se duplicó el seed.`);
-  process.exit(0);
-}
-
-const insertar = db.prepare(
-  `INSERT INTO zonas (plantilla_id, sistema, sector, codigo, descripcion, criticidad_base)
-   VALUES (?, ?, ?, ?, ?, ?)`
-);
-
-let total = 0;
-db.transaction(() => {
-  for (const [sector, codigos] of Object.entries(SECTORES)) {
-    for (const codigo of codigos) {
-      insertar.run(plantilla.id, SISTEMA, sector, codigo, descripcionPara(codigo), criticidadPara(codigo));
-      total++;
-    }
+  if (!plantilla) {
+    console.log('No se encontró una plantilla 980E; no se cargaron zonas.');
+    return;
   }
-})();
 
-console.log(`Seed listo: ${total} zonas de "${SISTEMA}" cargadas en la plantilla ${plantilla.modelo} ${plantilla.tipo} (id ${plantilla.id}).`);
+  const existentes = db.prepare('SELECT COUNT(*) AS n FROM zonas WHERE plantilla_id = ?').get(plantilla.id).n;
+  if (existentes > 0) {
+    console.log(`La plantilla ${plantilla.modelo} (id ${plantilla.id}) ya tiene ${existentes} zonas; no se duplicó el seed.`);
+    return;
+  }
+
+  const insertar = db.prepare(
+    `INSERT INTO zonas (plantilla_id, sistema, sector, codigo, descripcion, criticidad_base)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+
+  let total = 0;
+  db.transaction(() => {
+    for (const [sector, codigos] of Object.entries(SECTORES)) {
+      for (const codigo of codigos) {
+        insertar.run(plantilla.id, SISTEMA, sector, codigo, descripcionPara(codigo), criticidadPara(codigo));
+        total++;
+      }
+    }
+  })();
+
+  console.log(`Seed listo: ${total} zonas de "${SISTEMA}" cargadas en la plantilla ${plantilla.modelo} ${plantilla.tipo} (id ${plantilla.id}).`);
+}
+
+module.exports = { seed };
+
+if (require.main === module) seed(require('./index'));

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { infoEstado } from '@/components/EstadoHallazgo';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Camera,
@@ -39,19 +38,15 @@ interface Hallazgo {
   codigo: string | null;
   criticidad: 'alta' | 'media' | 'baja' | string;
   preexistencia: 'si' | 'no' | 'na' | string;
-  estado: string | null;
   creado_en: string;
 }
 
-// Orden de la lista: criticidad Alta primero; a igual criticidad, los menos
-// avanzados del ciclo de vida arriba (detectado primero, verificado al final).
+// Orden de la lista: criticidad Alta primero; a igual criticidad, por número.
 const ORDEN_CRITICIDAD: Record<string, number> = { alta: 0, media: 1, baja: 2 };
-const ORDEN_ESTADO: Record<string, number> = { detectado: 0, en_reparacion: 1, resuelto: 2, verificado: 3 };
 function ordenarHallazgos(hs: Hallazgo[]) {
   return [...hs].sort(
     (a, b) =>
       (ORDEN_CRITICIDAD[a.criticidad] ?? 9) - (ORDEN_CRITICIDAD[b.criticidad] ?? 9) ||
-      (ORDEN_ESTADO[a.estado || 'detectado'] ?? 9) - (ORDEN_ESTADO[b.estado || 'detectado'] ?? 9) ||
       a.numero - b.numero
   );
 }
@@ -115,7 +110,9 @@ function Mensaje({ tipo, texto }: MensajeProps) {
 export default function InspectionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aplicoRevisionRef = useRef(false);
 
   const [insp, setInsp] = useState<Inspeccion | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -152,6 +149,19 @@ export default function InspectionDetailPage() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Entrada directa a "Nueva revisión guiada" (?revision=1, desde la vista de equipo).
+  useEffect(() => {
+    if (aplicoRevisionRef.current) return;
+    if (searchParams.get('revision') === '1' && insp?.estado === 'completada') {
+      aplicoRevisionRef.current = true;
+      abrirModalRevision();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('revision');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, insp]);
 
   async function cargar() {
     try {
@@ -655,10 +665,6 @@ export default function InspectionDetailPage() {
             <span className="flex flex-col items-end gap-1">
               <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${ESTILOS_CRITICIDAD[h.criticidad] || 'bg-slate-100 text-slate-700'}`}>
                 {ETIQUETAS_CRITICIDAD[h.criticidad] || h.criticidad}
-              </span>
-              <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${infoEstado(h.estado).pill}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${infoEstado(h.estado).punto}`} aria-hidden="true" />
-                {infoEstado(h.estado).etiqueta}
               </span>
             </span>
           </Link>

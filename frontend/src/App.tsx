@@ -5,17 +5,18 @@ import AppLayout from '@/components/AppLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import RoleProtectedRoute from '@/components/RoleProtectedRoute';
 import LoginPage from '@/pages/LoginPage';
-import InspectionsListPage from '@/pages/InspectionsListPage';
+import FleetPage from '@/pages/FleetPage';
+import TeamDetailPage from '@/pages/TeamDetailPage';
 import DashboardPage from '@/pages/DashboardPage';
 import CreateInspectionPage from '@/pages/CreateInspectionPage';
 import InspectionDetailPage from '@/pages/InspectionDetailPage';
 import FindingPage from '@/pages/FindingPage';
 import NuevoHallazgoWizard from '@/components/hallazgo-wizard/NuevoHallazgoWizard';
 import GuidedReviewPage from '@/pages/GuidedReviewPage';
-import SeguimientoPage from '@/pages/SeguimientoPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import TemplateEditorPage from '@/pages/TemplateEditorPage';
 import PerfilPage from '@/pages/PerfilPage';
+import AdminPage from '@/pages/AdminPage';
 
 export default function App() {
   return (
@@ -25,7 +26,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<InspectionsListPage />} />
+              <Route path="/" element={<FleetPage />} />
+              <Route path="/equipos/:equipoNorm" element={<TeamDetailPage />} />
               <Route path="/inspecciones/nueva" element={<CreateInspectionPage />} />
               <Route path="/inspecciones/:id" element={<InspectionDetailPage />} />
               <Route path="/inspecciones/:id/revision" element={<GuidedReviewPage />} />
@@ -37,7 +39,9 @@ export default function App() {
               <Route path="/perfil" element={<PerfilPage />} />
               <Route element={<RoleProtectedRoute roles={['gerencial', 'admin']} />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/seguimiento" element={<SeguimientoPage />} />
+              </Route>
+              <Route element={<RoleProtectedRoute roles={['admin']} />}>
+                <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Route>
           </Route>

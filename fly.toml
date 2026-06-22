@@ -15,7 +15,8 @@ primary_region = "gru"
   min_machines_running = 0
 
 [[vm]]
-  memory = "256mb"
+  # 1 GB: Chromium (Puppeteer) necesita memoria para generar los PDF.
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1
 

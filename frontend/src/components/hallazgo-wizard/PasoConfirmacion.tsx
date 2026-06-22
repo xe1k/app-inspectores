@@ -78,6 +78,12 @@ export default function PasoConfirmacion({ datos, guardando, error, onGuardar }:
         )}
       </div>
 
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Tarjeta titulo="Observación / descripción del daño">{datos.descripcionDano.trim() || '—'}</Tarjeta>
+        <Tarjeta titulo="Trabajo a realizar">{datos.trabajoRealizar.trim() || '—'}</Tarjeta>
+        <Tarjeta titulo="Recomendación">{datos.recomendacion.trim() || '—'}</Tarjeta>
+      </div>
+
       {error && (
         <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           {error}

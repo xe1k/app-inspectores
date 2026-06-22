@@ -1,11 +1,10 @@
 // Firma digital de inspecciones: hash de integridad y control de intentos de PIN.
 //
 // El hash SHA-256 congela el contenido DECLARADO EN TERRENO al momento de
-// firmar. Se excluyen a propósito los campos del ciclo de vida posterior del
-// hallazgo (estado, fecha_estado_cambio, usuario_estado, fecha_actualizacion):
-// el seguimiento de reparaciones continúa después de la firma por diseño y
-// no debe invalidarla. Cualquier cambio en lo declarado (descripción,
-// criticidad, hallazgos agregados/quitados, cabecera) sí rompe el hash.
+// firmar (ver el SELECT explícito más abajo). Cualquier cambio en lo declarado
+// (descripción, criticidad, hallazgos agregados/quitados, cabecera) rompe el
+// hash; los campos administrados después de firmar (fecha_actualizacion) no
+// entran en el cálculo.
 const crypto = require('crypto');
 const db = require('../db');
 

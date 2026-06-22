@@ -102,26 +102,67 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_inspecciones_fecha_inicio ON inspecciones(fecha_inicio);
 `);
 
-// Cuentas de prueba para la presentación. Cuando estén las cuentas reales
-// de los 4 inspectores, se pueden agregar/editar desde la propia app o aquí.
-const PRUEBA = [
-  { username: 'inspector1@chaba.test', nombre: 'Inspector de prueba 1', clave: 'inspector123' },
-  { username: 'demo@chaba.test', nombre: 'Cuenta demo', clave: 'demo1234' },
-];
+// ── 1) Administrador ──────────────────────────────────────────────────────
+// El admin se crea desde variables de entorno (ADMIN_USERNAME, ADMIN_PASSWORD,
+// ADMIN_NOMBRE). En producción es obligatorio: sin admin no hay forma de entrar
+// a gestionar usuarios. Idempotente: si la cuenta ya existe, solo se asegura el
+// rol; si no hay variables y ya hay un admin, no se toca nada.
+const { ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_NOMBRE } = process.env;
+const hayAdmin = db.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'admin' AND activo = 1").get().n;
 
-const total = db.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n;
-if (total === 0) {
-  const insertar = db.prepare(
-    'INSERT INTO usuarios (username, nombre, password_hash) VALUES (?,?,?)'
-  );
-  for (const u of PRUEBA) {
-    insertar.run(u.username, u.nombre, bcrypt.hashSync(u.clave, 10));
-    console.log(`Usuario de prueba creado -> ${u.username} / ${u.clave}`);
+if (ADMIN_USERNAME && ADMIN_PASSWORD) {
+  const existente = db.prepare('SELECT id, rol FROM usuarios WHERE username = ?').get(ADMIN_USERNAME);
+  const nombre = (ADMIN_NOMBRE || 'Administrador').trim();
+  if (!existente) {
+    db.prepare(
+      `INSERT INTO usuarios (username, nombre, nombre_completo, password_hash, rol)
+       VALUES (?, ?, ?, ?, 'admin')`
+    ).run(ADMIN_USERNAME, nombre, nombre, bcrypt.hashSync(ADMIN_PASSWORD, 10));
+    console.log(`Administrador creado -> ${ADMIN_USERNAME}`);
+  } else if (existente.rol !== 'admin') {
+    db.prepare("UPDATE usuarios SET rol = 'admin', activo = 1 WHERE id = ?").run(existente.id);
+    console.log(`Usuario ${ADMIN_USERNAME} promovido a administrador.`);
+  } else {
+    console.log(`Administrador ${ADMIN_USERNAME} ya existe; sin cambios.`);
   }
-  console.log('IMPORTANTE: estas son cuentas de prueba para la presentación.');
-  console.log('Reemplázalas por las cuentas reales de los inspectores antes de usar la app en terreno.');
-} else {
-  console.log('La base ya tenía usuarios, no se crearon cuentas de prueba.');
+} else if (process.env.NODE_ENV === 'production' && !hayAdmin) {
+  console.error('ERROR: en producción debes definir ADMIN_USERNAME y ADMIN_PASSWORD para crear el administrador.');
+  console.error('Configúralos con: fly secrets set ADMIN_USERNAME=... ADMIN_PASSWORD=... ADMIN_NOMBRE="..."');
+  db.close();
+  process.exit(1);
+}
+
+// ── 2) Cuentas de prueba (solo desarrollo) ────────────────────────────────
+// Útiles para clonar el repo y probar localmente sin configurar variables.
+// En producción NUNCA se crean.
+if (process.env.NODE_ENV !== 'production') {
+  const total = db.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n;
+  if (total === 0) {
+    const PRUEBA = [
+      { username: 'inspector1@chaba.test', nombre: 'Inspector de prueba 1', clave: 'inspector123' },
+      { username: 'demo@chaba.test', nombre: 'Cuenta demo', clave: 'demo1234' },
+    ];
+    const insertar = db.prepare(
+      'INSERT INTO usuarios (username, nombre, nombre_completo, password_hash) VALUES (?,?,?,?)'
+    );
+    for (const u of PRUEBA) {
+      insertar.run(u.username, u.nombre, u.nombre, bcrypt.hashSync(u.clave, 10));
+      console.log(`Usuario de prueba creado -> ${u.username} / ${u.clave}`);
+    }
+  }
+}
+
+// ── 3) Datos de referencia (plantillas, diagramas y zonas) ────────────────
+// Idempotentes: cada seed verifica existencia antes de insertar. seed-base crea
+// las plantillas 980E y Tolva DT; seed-formatos crea WESTECH/797F/D10T; los de
+// zonas completan los catálogos de sectores. Necesitan al menos un usuario
+// (creado arriba) porque plantillas_equipo.creado_por referencia usuarios(id).
+for (const s of ['./seed-base', './seed-formatos', './seed-tolva-dt', './seed-zonas-980e']) {
+  try {
+    require(s).seed(db);
+  } catch (e) {
+    console.error(`Seed ${s} falló: ${e.message}`);
+  }
 }
 
 console.log('Base de datos lista.');

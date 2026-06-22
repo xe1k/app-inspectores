@@ -10,10 +10,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Inspecciones' },
+  { to: '/', label: 'Equipos' },
   { to: '/plantillas', label: 'Plantillas de equipo' },
   { to: '/dashboard', label: 'Dashboard', roles: ['gerencial', 'admin'] },
-  { to: '/seguimiento', label: 'Seguimiento', roles: ['gerencial', 'admin'] },
+  { to: '/admin', label: 'Administración', roles: ['admin'] },
 ];
 
 export default function AppLayout() {

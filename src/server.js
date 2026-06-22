@@ -13,11 +13,13 @@ const { obtenerCert, ipsLocales } = require('./cert');
 const { requireLogin, checkRol } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const plantillasRoutes = require('./routes/plantillas');
+const equiposRoutes = require('./routes/equipos');
 const inspeccionesRoutes = require('./routes/inspecciones');
 const hallazgosRoutes = require('./routes/hallazgos');
 const zonasRoutes = require('./routes/zonas');
 const perfilRoutes = require('./routes/perfil');
 const dashboardRoutes = require('./routes/dashboard');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;        // HTTPS (acceso normal)
@@ -37,11 +39,13 @@ app.use(session({
 // --- API ---
 app.use('/api/auth', authRoutes);
 app.use('/api/plantillas', requireLogin, plantillasRoutes);
+app.use('/api/equipos', requireLogin, equiposRoutes);
 app.use('/api/inspecciones', requireLogin, inspeccionesRoutes);
 app.use('/api/hallazgos', requireLogin, hallazgosRoutes);
 app.use('/api', requireLogin, zonasRoutes);
 app.use('/api/perfil', requireLogin, perfilRoutes);
 app.use('/api/dashboard', requireLogin, checkRol('gerencial', 'admin'), dashboardRoutes);
+app.use('/api/admin', requireLogin, checkRol('admin'), adminRoutes);
 
 // --- SPA de React (sirve toda la interfaz en /) ---
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');

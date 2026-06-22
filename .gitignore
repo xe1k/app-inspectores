@@ -5,6 +5,9 @@ node_modules/
 # La carpeta data/ se vuelve a crear sola al iniciar (src/db/index.js).
 data/
 
+# Variables de entorno con secretos (clave de sesión, admin). Solo se versiona .env.example
+.env
+
 # Logs y temporales
 *.log
 npm-debug.log*

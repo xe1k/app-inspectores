@@ -77,28 +77,6 @@ function cargarHallazgo(req, res, next) {
   next();
 }
 
-// gerencial y admin tienen visibilidad de seguimiento (solo lectura).
-function puedeVerSeguimiento(req) {
-  const rol = req.session.usuario.rol;
-  return rol === 'gerencial' || rol === 'admin' || rol === 'supervisor';
-}
-
-// Igual que cargarHallazgo, pero supervisores/gerencial/admin pueden acceder
-// a hallazgos de cualquier inspector (necesario para la vista de seguimiento).
-function cargarHallazgoSeguimiento(req, res, next) {
-  const h = db.prepare(
-    `SELECT h.*, i.inspector_id, i.estado AS inspeccion_estado, i.plantilla_id
-     FROM hallazgos h
-     JOIN inspecciones i ON i.id = h.inspeccion_id
-     WHERE h.id = ?`
-  ).get(req.params.id);
-  if (!h || (h.inspector_id !== req.session.usuario.id && !puedeVerSeguimiento(req))) {
-    return res.status(404).json({ error: 'Hallazgo no encontrado' });
-  }
-  req._hallazgo = h;
-  next();
-}
-
 function obtenerHallazgo(id) {
   const h = db.prepare('SELECT * FROM hallazgos WHERE id = ?').get(id);
   if (!h) return null;
@@ -174,74 +152,9 @@ router.get('/', (req, res) => {
   res.json(filas);
 });
 
-// ---------- CICLO DE VIDA ----------
-
-const ESTADOS_CICLO = ['detectado', 'en_reparacion', 'resuelto', 'verificado'];
-// Transición permitida: al siguiente paso del ciclo, o reabrir a 'detectado'.
-function transicionValida(desde, hacia) {
-  if (hacia === 'detectado') return desde !== 'detectado';
-  return ESTADOS_CICLO.indexOf(hacia) === ESTADOS_CICLO.indexOf(desde) + 1;
-}
-
-// GET /api/hallazgos/abiertos -> todos los hallazgos no verificados de todas
-// las inspecciones (solo gerencial/admin; alimenta la vista /seguimiento).
-router.get('/abiertos', checkRol('gerencial', 'admin'), (req, res) => {
-  res.json(db.prepare(
-    `SELECT h.id, h.inspeccion_id, h.numero, h.criticidad, h.estado, h.tipo_dano,
-            h.sistema, h.sector, h.codigo, h.fecha_estado_cambio, h.creado_en,
-            h.tiempo_reparacion, h.recursos,
-            i.equipo, i.ot, u.nombre AS inspector
-     FROM hallazgos h
-     JOIN inspecciones i ON i.id = h.inspeccion_id
-     JOIN usuarios u ON u.id = i.inspector_id
-     WHERE h.estado != 'verificado'
-     ORDER BY CASE h.criticidad WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END,
-              CASE h.estado WHEN 'detectado' THEN 0 WHEN 'en_reparacion' THEN 1 ELSE 2 END,
-              h.creado_en`
-  ).all());
-});
-
 // GET /api/hallazgos/:id -> detalle con fotos y marcas
 router.get('/:id', cargarHallazgo, (req, res) => {
   res.json(obtenerHallazgo(req._hallazgo.id));
-});
-
-// PATCH /api/hallazgos/:id/estado -> avanza el ciclo de vida y deja auditoría.
-// El usuario sale SIEMPRE de la sesión (no del body). Supervisores pueden
-// cambiar el estado de hallazgos de cualquier inspector.
-router.patch('/:id/estado', checkRol('inspector', 'supervisor', 'admin'), cargarHallazgoSeguimiento, (req, res) => {
-  const { estado, comentario } = req.body || {};
-  if (!ESTADOS_CICLO.includes(estado)) {
-    return res.status(400).json({ error: 'Estado no válido' });
-  }
-  const actual = req._hallazgo.estado || 'detectado';
-  if (estado === actual) return res.status(400).json({ error: 'El hallazgo ya está en ese estado' });
-  if (!transicionValida(actual, estado)) {
-    return res.status(400).json({ error: `No se puede pasar de "${actual}" a "${estado}"` });
-  }
-
-  const usuario = req.session.usuario.nombre;
-  const fecha = new Date().toISOString();
-  const nota = comentario != null ? (String(comentario).trim() || null) : null;
-
-  db.transaction(() => {
-    db.prepare(
-      'UPDATE hallazgos SET estado = ?, fecha_estado_cambio = ?, usuario_estado = ? WHERE id = ?'
-    ).run(estado, fecha, usuario, req._hallazgo.id);
-    db.prepare(
-      `INSERT INTO historial_hallazgo (hallazgo_id, estado_anterior, estado_nuevo, usuario, comentario, fecha)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(req._hallazgo.id, actual, estado, usuario, nota, fecha);
-  })();
-
-  res.json(obtenerHallazgo(req._hallazgo.id));
-});
-
-// GET /api/hallazgos/:id/historial -> auditoría de cambios de estado
-router.get('/:id/historial', cargarHallazgoSeguimiento, (req, res) => {
-  res.json(db.prepare(
-    'SELECT id, estado_anterior, estado_nuevo, usuario, comentario, fecha FROM historial_hallazgo WHERE hallazgo_id = ? ORDER BY fecha DESC, id DESC'
-  ).all(req._hallazgo.id));
 });
 
 // POST /api/hallazgos -> crea un nuevo hallazgo dentro de una inspección propia

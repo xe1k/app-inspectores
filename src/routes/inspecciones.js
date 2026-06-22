@@ -76,19 +76,6 @@ router.get('/:id', (req, res) => {
   res.json(insp);
 });
 
-// GET /api/inspecciones/:id/hallazgos-resumen -> conteo de hallazgos por estado
-router.get('/:id/hallazgos-resumen', (req, res) => {
-  const insp = db.prepare('SELECT id FROM inspecciones WHERE id = ? AND inspector_id = ?')
-    .get(req.params.id, req.session.usuario.id);
-  if (!insp) return res.status(404).json({ error: 'Inspeccion no encontrada' });
-  const filas = db.prepare(
-    'SELECT estado, COUNT(*) AS total FROM hallazgos WHERE inspeccion_id = ? GROUP BY estado'
-  ).all(insp.id);
-  const resumen = { detectado: 0, en_reparacion: 0, resuelto: 0, verificado: 0 };
-  for (const f of filas) if (f.estado in resumen) resumen[f.estado] = f.total;
-  res.json(resumen);
-});
-
 // GET /api/inspecciones/:id/informe -> genera (y descarga) el PDF del informe completo
 router.get('/:id/informe', async (req, res) => {
   const insp = obtenerInspeccion(req.params.id, req.session.usuario.id);
